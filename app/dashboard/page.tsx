@@ -29,7 +29,8 @@ export default function DashboardPage() {
   const [outboundList, setOutboundList] = useState<{ name: string; phone: string }[]>([])
   const [uploading, setUploading] = useState(false)
   const [calling, setCalling] = useState(false)
-  const [callResults, setCallResults] = useState<{ phone: string; success: boolean; error?: string }[]>([])
+  const [callingIndex, setCallingIndex] = useState<number | null>(null)
+  const [callResults, setCallResults] = useState<{ phone: string; success: boolean; error?: string | null }[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function fetchData() {
@@ -84,6 +85,32 @@ export default function DashboardPage() {
       setUploading(false)
     }
     reader.readAsArrayBuffer(file)
+  }
+
+  async function handleCallOne(item: { name: string; phone: string }, index: number) {
+    if (!client?.retell_agent_id || !client?.retell_phone_number) {
+      alert('Chưa cấu hình Retell Agent. Liên hệ admin.')
+      return
+    }
+    setCallingIndex(index)
+    const res = await fetch('/api/outbound', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phones: [item],
+        agentId: client.retell_agent_id,
+        fromNumber: client.retell_phone_number,
+      }),
+    })
+    const data = await res.json()
+    const result = data.results?.[0]
+    setCallResults(prev => {
+      const next = [...prev]
+      next[index] = result
+      return next
+    })
+    setCallingIndex(null)
+    fetchData()
   }
 
   async function handleStartCalling() {
@@ -183,16 +210,35 @@ export default function DashboardPage() {
                       <th className="px-3 py-2 text-left">#</th>
                       <th className="px-3 py-2 text-left">Tên</th>
                       <th className="px-3 py-2 text-left">Số điện thoại</th>
+                      <th className="px-3 py-2 text-center">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {outboundList.slice(0, 10).map((r, i) => (
-                      <tr key={i} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-400 text-xs">{i + 1}</td>
-                        <td className="px-3 py-2 text-gray-700">{r.name || '--'}</td>
-                        <td className="px-3 py-2 text-gray-700">{r.phone}</td>
-                      </tr>
-                    ))}
+                    {outboundList.slice(0, 10).map((r, i) => {
+                      const result = callResults[i]
+                      return (
+                        <tr key={i} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 text-gray-400 text-xs">{i + 1}</td>
+                          <td className="px-3 py-2 text-gray-700">{r.name || '--'}</td>
+                          <td className="px-3 py-2 text-gray-700">{r.phone}</td>
+                          <td className="px-3 py-2 text-center">
+                            {result ? (
+                              result.success
+                                ? <span className="text-green-600 text-xs font-medium">✓ Đã gọi</span>
+                                : <span className="text-red-500 text-xs" title={result.error ?? ''}>✗ {result.error ?? 'Lỗi'}</span>
+                            ) : (
+                              <button
+                                onClick={() => handleCallOne(r, i)}
+                                disabled={callingIndex === i}
+                                className="px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 disabled:opacity-50"
+                              >
+                                {callingIndex === i ? '...' : '📞 Gọi'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
                 {outboundList.length > 10 && (

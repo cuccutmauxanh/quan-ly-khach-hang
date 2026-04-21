@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
         }),
       })
       const data = await res.json()
-      results.push({ phone: item.phone, success: res.ok, call_id: data.call_id, error: data.error })
+      const errorMsg = data.error || data.message || data.detail || JSON.stringify(data)
+      results.push({ phone: item.phone, success: res.ok, call_id: data.call_id, error: res.ok ? null : errorMsg })
     } catch (e) {
       results.push({ phone: item.phone, success: false, error: String(e) })
     }
