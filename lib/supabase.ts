@@ -42,5 +42,10 @@ export type Call = {
   appointment_booked: boolean
   summary: string | null
   status: string | null
+  contact_phone: string | null
+  contact_name: string | null
+  retell_call_id: string | null
+  appointment_datetime: string | null
+  appointment_notes: string | null
   created_at: string
 }
