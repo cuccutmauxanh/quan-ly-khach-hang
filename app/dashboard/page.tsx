@@ -28,6 +28,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [outboundList, setOutboundList] = useState<{ name: string; phone: string }[]>([])
   const [uploading, setUploading] = useState(false)
+  const [calling, setCalling] = useState(false)
+  const [callResults, setCallResults] = useState<{ phone: string; success: boolean; error?: string }[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function fetchData() {
@@ -65,10 +67,11 @@ export default function DashboardPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setCallResults([])
 
     const reader = new FileReader()
     reader.onload = (evt) => {
-      const wb = XLSX.read(evt.target?.result, { type: 'binary' })
+      const wb = XLSX.read(evt.target?.result, { type: 'array' })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws)
 
@@ -80,7 +83,33 @@ export default function DashboardPage() {
       setOutboundList(parsed)
       setUploading(false)
     }
-    reader.readAsBinaryString(file)
+    reader.readAsArrayBuffer(file)
+  }
+
+  async function handleStartCalling() {
+    if (!client?.retell_agent_id || !client?.retell_phone_number) {
+      alert('Chưa cấu hình Retell Agent cho khách hàng này. Vui lòng liên hệ admin.')
+      return
+    }
+    if (!confirm(`Xác nhận gọi ${outboundList.length} số điện thoại?`)) return
+
+    setCalling(true)
+    setCallResults([])
+
+    const res = await fetch('/api/outbound', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phones: outboundList,
+        agentId: client.retell_agent_id,
+        fromNumber: client.retell_phone_number,
+      }),
+    })
+
+    const data = await res.json()
+    setCallResults(data.results ?? [])
+    setCalling(false)
+    fetchData()
   }
 
   if (loading) return (
@@ -170,9 +199,32 @@ export default function DashboardPage() {
                   <p className="text-xs text-gray-400 px-3 py-2 bg-gray-50">...và {outboundList.length - 10} số nữa</p>
                 )}
               </div>
-              <button className="mt-3 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">
-                🚀 Bắt đầu gọi {outboundList.length} số
+              <button
+                onClick={handleStartCalling}
+                disabled={calling}
+                className="mt-3 px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-60"
+              >
+                {calling ? '⏳ Đang gọi...' : `🚀 Bắt đầu gọi ${outboundList.length} số`}
               </button>
+
+              {callResults.length > 0 && (
+                <div className="mt-4 border border-gray-100 rounded-lg overflow-hidden">
+                  <p className="px-3 py-2 bg-gray-50 text-xs font-medium text-gray-600">
+                    Kết quả: {callResults.filter(r => r.success).length}/{callResults.length} cuộc gọi khởi tạo thành công
+                  </p>
+                  <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                    {callResults.map((r, i) => (
+                      <div key={i} className="px-3 py-2 flex items-center justify-between text-xs">
+                        <span className="text-gray-600">{r.phone}</span>
+                        {r.success
+                          ? <span className="text-green-600 font-medium">✓ Đã gọi</span>
+                          : <span className="text-red-500">✗ {r.error ?? 'Lỗi'}</span>
+                        }
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
