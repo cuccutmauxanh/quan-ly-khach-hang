@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           from_number: fromNumber,
           to_number: item.phone.startsWith('+') ? item.phone : `+84${item.phone.replace(/^0/, '')}`,
-          agent_id: agentId,
+          override_agent_id: agentId,
           retell_llm_dynamic_variables: {
             customer_name: item.name || '',
           },
