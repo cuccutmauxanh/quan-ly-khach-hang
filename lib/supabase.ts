@@ -20,6 +20,10 @@ export type Client = {
   contact_email: string | null
   retell_agent_id: string | null
   retell_phone_number: string | null
+  agent_receptionist_id: string | null
+  agent_cold_id: string | null
+  agent_cskh_id: string | null
+  agent_warm_id: string | null
   supabase_schema: string | null
   zapbx_ip: string | null
   zapbx_port: number | null
