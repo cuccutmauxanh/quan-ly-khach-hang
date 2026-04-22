@@ -74,7 +74,7 @@ export default function HomePage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
-    const ADMIN_EMAIL = 'hieunguyen2507003@gmail.com'
+    const ADMIN_EMAIL = 'graphene201219@gmail.com'
     if (user.email !== ADMIN_EMAIL) {
       const { data: cu } = await supabase.from('client_users').select('client_id').eq('user_id', user.id).single()
       if (cu) { router.push('/dashboard'); return }

@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Admin → về trang chủ, client → về dashboard
-      if (session.user.email === 'hieunguyen2507003@gmail.com') {
+      if (session.user.email === 'graphene201219@gmail.com') {
         return NextResponse.redirect(`${origin}/`)
       }
     }
