@@ -49,3 +49,28 @@ export type Call = {
   appointment_notes: string | null
   created_at: string
 }
+
+export type Contact = {
+  id: string
+  tenant_id: string
+  full_name: string | null
+  phone: string
+  email: string | null
+  call_count: number | null
+  last_called_at: string | null
+  notes: string | null
+  interest_level: string | null
+  created_at: string
+}
+
+export type Appointment = {
+  id: string
+  tenant_id: string
+  contact_id: string | null
+  call_id: string | null
+  scheduled_at: string | null
+  status: string | null
+  appointment_notes: string | null
+  created_at: string
+  contacts?: { full_name: string | null; phone: string } | null
+}

@@ -3,8 +3,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase, type Client, type Call } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { Phone, PhoneIncoming, PhoneOutgoing, CalendarCheck, Upload, LogOut, RefreshCw, X } from 'lucide-react'
+import { Phone, PhoneIncoming, PhoneOutgoing, CalendarCheck, Upload, RefreshCw, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import Nav from '@/components/nav'
 
 const DIRECTION_MAP: Record<string, { label: string; color: string }> = {
   inbound:  { label: 'Gọi đến', color: 'bg-blue-100 text-blue-700' },
@@ -179,11 +180,6 @@ export default function DashboardPage() {
     return () => clearInterval(interval)
   }, [fetchCalls])
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -254,15 +250,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50">
       {selectedCall && <CallDetailModal call={selectedCall} onClose={() => setSelectedCall(null)} />}
 
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-indigo-600">{client?.name ?? 'Dashboard'}</h1>
-          <p className="text-xs text-gray-400">AutoVoice Pro</p>
-        </div>
-        <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700">
-          <LogOut className="w-4 h-4" /> Đăng xuất
-        </button>
-      </header>
+      <Nav clientName={client?.name} />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
 
