@@ -38,6 +38,17 @@ export async function GET(request: NextRequest) {
             .insert({ user_id: userId, client_id: matchedClient.id })
         }
       }
+
+      // Admin → về trang chủ, client → về dashboard
+      const { data: adminRow } = await supabase
+        .from('admins')
+        .select('user_id')
+        .eq('user_id', userId)
+        .single()
+
+      if (adminRow) {
+        return NextResponse.redirect(`${origin}/`)
+      }
     }
   }
 
