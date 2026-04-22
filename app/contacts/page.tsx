@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { UserPlus, Upload, X, Phone } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Nav from '@/components/nav'
+import { PageSkeleton } from '@/components/skeleton'
+import { useToast } from '@/components/toast'
 
 type Filter = 'all' | 'uncalled' | 'called' | 'booked'
 
@@ -25,6 +27,7 @@ type AddForm = { full_name: string; phone: string; email: string; notes: string;
 
 export default function ContactsPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [client, setClient] = useState<Client | null>(null)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [bookedIds, setBookedIds] = useState<Set<string>>(new Set())
@@ -81,7 +84,7 @@ export default function ContactsPage() {
 
   async function handleCallContact(contact: Contact) {
     if (!client?.retell_agent_id || !client?.retell_phone_number) {
-      alert('Chưa cấu hình Retell Agent. Liên hệ admin.')
+      toast('Chưa cấu hình Retell Agent. Liên hệ admin.', 'error')
       return
     }
     setCallingId(contact.id)
@@ -102,8 +105,9 @@ export default function ContactsPage() {
         call_count: (contact.call_count ?? 0) + 1,
       }).eq('id', contact.id)
       await fetchContacts(clientIdRef.current)
+      toast(`Đã kết nối cuộc gọi đến ${contact.full_name || contact.phone}`, 'success')
     } else {
-      alert('Lỗi: ' + (data.results?.[0]?.error ?? 'Không thể gọi'))
+      toast('Lỗi: ' + (data.results?.[0]?.error ?? 'Không thể gọi'), 'error')
     }
     setCallingId(null)
   }
@@ -126,7 +130,9 @@ export default function ContactsPage() {
       if (records.length > 0) {
         await supabase.from('contacts').upsert(records, { onConflict: 'phone,tenant_id', ignoreDuplicates: true })
         await fetchContacts(clientIdRef.current!)
-        alert(`Đã import ${records.length} liên hệ`)
+        toast(`Đã import ${records.length} liên hệ`, 'success')
+      } else {
+        toast('Không tìm thấy dữ liệu hợp lệ trong file', 'error')
       }
     }
     reader.readAsArrayBuffer(file)
@@ -142,7 +148,7 @@ export default function ContactsPage() {
     return true
   })
 
-  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">Đang tải...</div>
+  if (loading) return <PageSkeleton />
 
   const tabs: { key: Filter; label: string; count: number }[] = [
     { key: 'all',      label: 'Tất cả',    count: contacts.length },

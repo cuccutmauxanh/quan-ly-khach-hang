@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { Phone, PhoneIncoming, PhoneOutgoing, CalendarCheck, Upload, RefreshCw, X } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Nav from '@/components/nav'
+import { PageSkeleton } from '@/components/skeleton'
+import { useToast } from '@/components/toast'
 
 const DIRECTION_MAP: Record<string, { label: string; color: string }> = {
   inbound:  { label: 'Gọi đến', color: 'bg-blue-100 text-blue-700' },
@@ -136,6 +138,7 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
 
 export default function DashboardPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [client, setClient] = useState<Client | null>(null)
   const [calls, setCalls] = useState<Call[]>([])
   const [loading, setLoading] = useState(true)
@@ -216,7 +219,7 @@ export default function DashboardPage() {
 
   async function handleCallOne(item: { name: string; phone: string }, index: number) {
     if (!client?.retell_agent_id || !client?.retell_phone_number) {
-      alert('Chưa cấu hình Retell Agent. Liên hệ admin.')
+      toast('Chưa cấu hình Retell Agent. Liên hệ admin.', 'error')
       return
     }
     setCallingIndex(index)
@@ -233,7 +236,7 @@ export default function DashboardPage() {
 
   async function handleStartCalling() {
     if (!client?.retell_agent_id || !client?.retell_phone_number) {
-      alert('Chưa cấu hình Retell Agent cho khách hàng này. Vui lòng liên hệ admin.')
+      toast('Chưa cấu hình Retell Agent. Liên hệ admin.', 'error')
       return
     }
     if (!confirm(`Xác nhận gọi ${outboundList.length} số điện thoại?`)) return
@@ -249,9 +252,7 @@ export default function DashboardPage() {
     setCalling(false)
   }
 
-  if (loading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">Đang tải...</div>
-  )
+  if (loading) return <PageSkeleton />
 
   const totalCalls = calls.length
   const inbound = calls.filter(c => c.direction === 'inbound').length

@@ -5,6 +5,7 @@ import { supabase, type Client, type Appointment } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { CalendarCheck, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import Nav from '@/components/nav'
+import { PageSkeleton } from '@/components/skeleton'
 
 type StatusFilter = 'all' | 'upcoming' | 'today' | 'past'
 
@@ -123,7 +124,7 @@ export default function AppointmentsPage() {
   const upcomingCount = appointments.filter(a => getTimeStatus(a.scheduled_at) === 'upcoming').length
   const pastCount = appointments.filter(a => getTimeStatus(a.scheduled_at) === 'past').length
 
-  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">Đang tải...</div>
+  if (loading) return <PageSkeleton />
 
   const tabs: { key: StatusFilter; label: string; count: number }[] = [
     { key: 'all',      label: 'Tất cả',   count: appointments.length },
