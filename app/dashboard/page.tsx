@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   Phone, PhoneIncoming, PhoneOutgoing, CalendarCheck,
   Upload, RefreshCw, X, Heart, Zap, Search,
-  SlidersHorizontal, ChevronDown, ChevronUp, Check, Save, Sparkles, MessageSquare,
+  Check, Save, Sparkles, MessageSquare, Settings2,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import Nav from '@/components/nav'
@@ -17,7 +17,15 @@ import { useToast } from '@/components/toast'
 
 type AgentTab = 'receptionist' | 'cold' | 'cskh' | 'warm'
 type SaveStatus = 'idle' | 'saving' | 'ok' | 'error'
-type AgentData = { agent_name?: string; begin_message?: string | null; general_prompt?: string | null; llm_id?: string | null }
+type AgentData = {
+  agent_name?: string
+  begin_message?: string | null
+  general_prompt?: string | null
+  llm_id?: string | null
+  responsiveness?: number | null
+  max_call_duration_ms?: number | null
+  reminder_trigger_ms?: number | null
+}
 
 const TABS: {
   key: AgentTab
@@ -175,115 +183,229 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
   )
 }
 
-// ─── Agent Config Panel (inline, collapsible) ─────────────────────────────────
+// ─── Agent Edit Modal (popup) ─────────────────────────────────────────────────
 
-function AgentConfigPanel({
-  tabDef, client, open, onToggle,
-  agentData, loadingAgent, prompt, greeting, saveStatus,
-  onFetch, onPromptChange, onGreetingChange, onSave, onApplyDefault,
+const MAX_DURATION_OPTIONS = [
+  { label: 'Không giới hạn', value: null },
+  { label: '3 phút',  value: 3 * 60 * 1000 },
+  { label: '5 phút',  value: 5 * 60 * 1000 },
+  { label: '10 phút', value: 10 * 60 * 1000 },
+  { label: '15 phút', value: 15 * 60 * 1000 },
+]
+const REMINDER_OPTIONS = [
+  { label: '2 giây',  value: 2000 },
+  { label: '3 giây',  value: 3000 },
+  { label: '5 giây',  value: 5000 },
+  { label: '10 giây', value: 10000 },
+]
+
+function AgentModal({
+  tabDef, client, open, onClose,
+  agentData, loadingAgent,
+  prompt, greeting, responsiveness, maxDuration, reminderMs,
+  saveStatus,
+  onFetch, onPromptChange, onGreetingChange,
+  onResponsivenessChange, onMaxDurationChange, onReminderChange,
+  onSave, onApplyDefault,
 }: {
-  tabDef: typeof TABS[0]; client: Client | null; open: boolean; onToggle: () => void
+  tabDef: typeof TABS[0]; client: Client | null; open: boolean; onClose: () => void
   agentData: AgentData | null; loadingAgent: boolean
-  prompt: string; greeting: string; saveStatus: SaveStatus
-  onFetch: () => void; onPromptChange: (v: string) => void; onGreetingChange: (v: string) => void
+  prompt: string; greeting: string; responsiveness: number; maxDuration: number | null; reminderMs: number
+  saveStatus: SaveStatus
+  onFetch: () => void
+  onPromptChange: (v: string) => void; onGreetingChange: (v: string) => void
+  onResponsivenessChange: (v: number) => void; onMaxDurationChange: (v: number | null) => void; onReminderChange: (v: number) => void
   onSave: () => void; onApplyDefault: () => void
 }) {
   const agentId = client?.[tabDef.agentField] as string | null
+  const Icon = tabDef.icon
 
-  // Fetch data when first opened
   useEffect(() => {
     if (open && !agentData && !loadingAgent && agentId) onFetch()
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const promptPreview = prompt.split('\n')[0]?.slice(0, 70)
+  // Khóa scroll body khi modal mở
+  useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
+  if (!open) return null
 
   return (
-    <div className={`mb-4 rounded-xl border overflow-hidden transition-all ${open ? `${tabDef.border} shadow-sm` : 'border-gray-100'}`}>
-      {/* Toggle bar — always visible */}
-      <button
-        onClick={onToggle}
-        className={`w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors ${
-          open ? `${tabDef.tagBg}` : 'bg-gray-50 hover:bg-gray-100'
-        }`}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col"
+        style={{ maxHeight: '90vh' }}
+        onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${open ? tabDef.tagText : 'text-gray-400'}`} />
-          <span className={`text-xs font-semibold ${open ? tabDef.tagText : 'text-gray-500'}`}>Kịch bản AI</span>
-          {!open && promptPreview && (
-            <span className="text-xs text-gray-400 truncate hidden sm:block">— {promptPreview}...</span>
-          )}
-          {!agentId && <span className="text-xs text-amber-500 ml-1">⚠ Chưa cài đặt</span>}
+        {/* Header */}
+        <div className={`px-5 py-4 ${tabDef.tagBg} border-b ${tabDef.border} flex items-center justify-between shrink-0 rounded-t-2xl`}>
+          <div className="flex items-center gap-2.5">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold text-white ${tabDef.tag}`}>
+              <Icon className="w-3 h-3" />{tabDef.label}
+            </span>
+            <span className={`text-sm font-semibold ${tabDef.tagText}`}>Cài đặt trợ lý AI</span>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-black/10 rounded-lg transition-colors">
+            <X className={`w-4 h-4 ${tabDef.tagText}`} />
+          </button>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {loadingAgent && <RefreshCw className="w-3 h-3 text-gray-400 animate-spin" />}
-          <span className={`text-xs font-medium ${open ? tabDef.tagText : 'text-gray-400'}`}>
-            {open ? 'Đóng' : 'Chỉnh sửa'}
-          </span>
-          {open ? <ChevronUp className={`w-3.5 h-3.5 ${tabDef.tagText}`} /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
-        </div>
-      </button>
 
-      {/* Expandable editor */}
-      {open && (
-        <div className="bg-white p-4 space-y-4 border-t border-gray-100">
-          {/* Prompt */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-gray-400" />
-                <span className="text-xs font-semibold text-gray-600">Kịch bản giao tiếp</span>
-                <span className="text-xs text-gray-300">{prompt.length} ký tự</span>
+        {/* Body — scrollable */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5 min-h-0">
+          {loadingAgent ? (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="w-6 h-6 text-gray-400 animate-spin" />
+              <span className="text-sm text-gray-400 ml-3">Đang tải cấu hình...</span>
+            </div>
+          ) : (
+            <>
+              {/* Kịch bản giao tiếp */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                    <span className="text-sm font-semibold text-gray-700">Kịch bản giao tiếp</span>
+                    <span className="text-xs text-gray-400">{prompt.length} ký tự</span>
+                  </div>
+                  <button onClick={onApplyDefault}
+                    className="text-xs text-indigo-600 hover:bg-indigo-50 px-2.5 py-1 rounded-lg font-medium transition-colors">
+                    Dùng mẫu mặc định
+                  </button>
+                </div>
+                <textarea
+                  value={prompt}
+                  onChange={e => onPromptChange(e.target.value)}
+                  rows={8}
+                  disabled={!agentId}
+                  placeholder="Mô tả vai trò AI: nhiệm vụ, cách giao tiếp, những điều không được làm..."
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none font-mono leading-relaxed disabled:opacity-50 disabled:bg-gray-50"
+                />
               </div>
-              <button onClick={onApplyDefault}
-                className="text-xs text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-0.5 rounded-lg transition-colors font-medium">
-                Dùng mẫu mặc định
-              </button>
-            </div>
-            <textarea
-              value={prompt}
-              onChange={e => onPromptChange(e.target.value)}
-              rows={9}
-              disabled={!agentId}
-              placeholder="Mô tả vai trò, nhiệm vụ và cách AI cần giao tiếp với khách hàng..."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none font-mono leading-relaxed disabled:opacity-50 disabled:bg-gray-50"
-            />
-          </div>
 
-          {/* Greeting */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-2">
-              <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
-              <span className="text-xs font-semibold text-gray-600">Câu mở đầu cuộc gọi</span>
-            </div>
-            <input
-              value={greeting}
-              onChange={e => onGreetingChange(e.target.value)}
-              disabled={!agentId}
-              placeholder="Để trống → AI tự chọn câu mở đầu. VD: Xin chào! Đây là Nha Khoa Mila..."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
-            />
-          </div>
+              {/* Câu mở đầu */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="text-sm font-semibold text-gray-700">Câu mở đầu cuộc gọi</span>
+                </div>
+                <input
+                  value={greeting}
+                  onChange={e => onGreetingChange(e.target.value)}
+                  disabled={!agentId}
+                  placeholder="Để trống → AI tự chọn. VD: Xin chào! Đây là Nha Khoa Mila, tôi có thể giúp gì?"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
+                />
+              </div>
 
-          {/* Save */}
-          <div className="flex justify-end">
-            <button
-              onClick={onSave}
-              disabled={!agentId || saveStatus === 'saving' || saveStatus === 'ok'}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-50 ${
-                saveStatus === 'ok'     ? 'bg-green-600 text-white' :
-                saveStatus === 'error'  ? 'bg-red-600 text-white' :
-                saveStatus === 'saving' ? 'bg-indigo-400 text-white cursor-not-allowed' :
-                'bg-indigo-600 hover:bg-indigo-700 text-white'
-              }`}
-            >
-              {saveStatus === 'saving' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> :
-               saveStatus === 'ok'     ? <Check className="w-3.5 h-3.5" /> :
-               <Save className="w-3.5 h-3.5" />}
-              {saveStatus === 'saving' ? 'Đang lưu...' : saveStatus === 'ok' ? 'Đã lưu!' : saveStatus === 'error' ? 'Lỗi, thử lại' : 'Lưu kịch bản'}
-            </button>
-          </div>
+              {/* Divider */}
+              <div className="border-t border-dashed border-gray-200" />
+
+              {/* Cài đặt AI */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-4">
+                  <Settings2 className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-sm font-semibold text-gray-700">Cài đặt hành vi AI</span>
+                </div>
+                <div className="space-y-4">
+
+                  {/* Responsiveness */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-medium text-gray-600">Tốc độ phản hồi</span>
+                      <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                        {responsiveness <= 0.3 ? 'Chậm rãi' : responsiveness <= 0.6 ? 'Cân bằng' : responsiveness <= 0.85 ? 'Nhanh nhẹn' : 'Rất nhanh'}
+                      </span>
+                    </div>
+                    <input
+                      type="range" min="0" max="1" step="0.05"
+                      value={responsiveness}
+                      onChange={e => onResponsivenessChange(parseFloat(e.target.value))}
+                      disabled={!agentId}
+                      className="w-full accent-indigo-600 disabled:opacity-50"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+                      <span>Chậm, suy nghĩ kỹ</span>
+                      <span>Phản hồi tức thì</span>
+                    </div>
+                  </div>
+
+                  {/* Max duration + Reminder — 2 cột */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                        Tự kết thúc sau
+                      </label>
+                      <select
+                        value={maxDuration ?? 'null'}
+                        onChange={e => onMaxDurationChange(e.target.value === 'null' ? null : Number(e.target.value))}
+                        disabled={!agentId}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50 bg-white"
+                      >
+                        {MAX_DURATION_OPTIONS.map(o => (
+                          <option key={String(o.value)} value={String(o.value)}>{o.label}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-400 mt-1">Giới hạn thời lượng tối đa</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1.5">
+                        Nhắc khi khách im lặng
+                      </label>
+                      <select
+                        value={reminderMs}
+                        onChange={e => onReminderChange(Number(e.target.value))}
+                        disabled={!agentId}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50 bg-white"
+                      >
+                        {REMINDER_OPTIONS.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-400 mt-1">Hỏi lại sau X giây không nghe</p>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {!agentId && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+                  ⚠ Trợ lý này chưa có mã cấu hình — liên hệ admin để kích hoạt.
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between shrink-0 rounded-b-2xl">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-xl transition-colors font-medium">
+            Đóng
+          </button>
+          <button
+            onClick={onSave}
+            disabled={!agentId || saveStatus === 'saving' || saveStatus === 'ok'}
+            className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 ${
+              saveStatus === 'ok'     ? 'bg-green-600 text-white' :
+              saveStatus === 'error'  ? 'bg-red-600 text-white' :
+              saveStatus === 'saving' ? 'bg-indigo-400 text-white cursor-not-allowed' :
+              'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
+            }`}
+          >
+            {saveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> :
+             saveStatus === 'ok'     ? <Check className="w-4 h-4" /> :
+             <Save className="w-4 h-4" />}
+            {saveStatus === 'saving' ? 'Đang lưu...' : saveStatus === 'ok' ? 'Đã lưu!' : saveStatus === 'error' ? 'Lỗi — thử lại' : 'Lưu cài đặt'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -698,6 +820,9 @@ export default function DashboardPage() {
   const [loadingAgentMap, setLoadingAgentMap] = useState<Partial<Record<AgentTab, boolean>>>({})
   const [promptMap, setPromptMap] = useState<Partial<Record<AgentTab, string>>>({})
   const [greetingMap, setGreetingMap] = useState<Partial<Record<AgentTab, string>>>({})
+  const [responsivenessMap, setResponsivenessMap] = useState<Partial<Record<AgentTab, number>>>({})
+  const [maxDurationMap, setMaxDurationMap] = useState<Partial<Record<AgentTab, number | null>>>({})
+  const [reminderMap, setReminderMap] = useState<Partial<Record<AgentTab, number>>>({})
   const [saveMap, setSaveMap] = useState<Partial<Record<AgentTab, SaveStatus>>>({})
 
   // Close config when switching tabs
@@ -750,6 +875,9 @@ export default function DashboardPage() {
       setAgentDataMap(p => ({ ...p, [key]: data }))
       setPromptMap(p => ({ ...p, [key]: data.general_prompt ?? '' }))
       setGreetingMap(p => ({ ...p, [key]: data.begin_message ?? '' }))
+      setResponsivenessMap(p => ({ ...p, [key]: data.responsiveness ?? 0.8 }))
+      setMaxDurationMap(p => ({ ...p, [key]: data.max_call_duration_ms ?? null }))
+      setReminderMap(p => ({ ...p, [key]: data.reminder_trigger_ms ?? 3000 }))
     } catch { toast('Không thể tải kịch bản AI', 'error') }
     setLoadingAgentMap(p => ({ ...p, [key]: false }))
   }
@@ -763,7 +891,15 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/retell-agent', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentId, begin_message: greetingMap[key] || null, general_prompt: promptMap[key] || null, llm_id: agentDataMap[key]?.llm_id ?? null }),
+        body: JSON.stringify({
+          agentId,
+          begin_message:        greetingMap[key] || null,
+          general_prompt:       promptMap[key] || null,
+          llm_id:               agentDataMap[key]?.llm_id ?? null,
+          responsiveness:       responsivenessMap[key] ?? 0.8,
+          max_call_duration_ms: maxDurationMap[key] ?? null,
+          reminder_trigger_ms:  reminderMap[key] ?? 3000,
+        }),
       })
       if (!res.ok) throw new Error()
       setSaveMap(p => ({ ...p, [key]: 'ok' }))
@@ -835,29 +971,46 @@ export default function DashboardPage() {
 
           {/* Tab content */}
           <div className="p-4">
-            {/* Inline agent config panel — inside every tab, at the top */}
-            <AgentConfigPanel
-              tabDef={tabDef}
-              client={client}
-              open={configOpen}
-              onToggle={() => setConfigOpen(o => !o)}
-              agentData={agentDataMap[activeTab] ?? null}
-              loadingAgent={!!loadingAgentMap[activeTab]}
-              prompt={promptMap[activeTab] ?? ''}
-              greeting={greetingMap[activeTab] ?? ''}
-              saveStatus={saveMap[activeTab] ?? 'idle'}
-              onFetch={() => fetchAgent(activeTab)}
-              onPromptChange={v => setPromptMap(p => ({ ...p, [activeTab]: v }))}
-              onGreetingChange={v => setGreetingMap(p => ({ ...p, [activeTab]: v }))}
-              onSave={() => saveAgent(activeTab)}
-              onApplyDefault={() => applyDefault(activeTab)}
-            />
+            {/* Nút mở popup cài đặt AI — góc trên phải */}
+            <div className="flex justify-end mb-3">
+              <button
+                onClick={() => setConfigOpen(true)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all hover:shadow-sm ${tabDef.tagBg} ${tabDef.tagText} ${tabDef.border}`}
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                Kịch bản AI
+              </button>
+            </div>
 
             {activeTab === 'receptionist' && <ReceptionistTab calls={calls} client={client} />}
             {activeTab === 'cold'         && <ColdCallTab client={client} />}
             {activeTab === 'cskh'         && <CSKHTab client={client} contacts={contacts} />}
             {activeTab === 'warm'         && <WarmLeadsTab client={client} contacts={contacts} />}
           </div>
+
+          {/* Agent edit modal — portal-style popup */}
+          <AgentModal
+            tabDef={tabDef}
+            client={client}
+            open={configOpen}
+            onClose={() => setConfigOpen(false)}
+            agentData={agentDataMap[activeTab] ?? null}
+            loadingAgent={!!loadingAgentMap[activeTab]}
+            prompt={promptMap[activeTab] ?? ''}
+            greeting={greetingMap[activeTab] ?? ''}
+            responsiveness={responsivenessMap[activeTab] ?? 0.8}
+            maxDuration={maxDurationMap[activeTab] ?? null}
+            reminderMs={reminderMap[activeTab] ?? 3000}
+            saveStatus={saveMap[activeTab] ?? 'idle'}
+            onFetch={() => fetchAgent(activeTab)}
+            onPromptChange={(v: string) => setPromptMap(p => ({ ...p, [activeTab]: v }))}
+            onGreetingChange={(v: string) => setGreetingMap(p => ({ ...p, [activeTab]: v }))}
+            onResponsivenessChange={(v: number) => setResponsivenessMap(p => ({ ...p, [activeTab]: v }))}
+            onMaxDurationChange={(v: number | null) => setMaxDurationMap(p => ({ ...p, [activeTab]: v }))}
+            onReminderChange={(v: number) => setReminderMap(p => ({ ...p, [activeTab]: v }))}
+            onSave={() => saveAgent(activeTab)}
+            onApplyDefault={() => applyDefault(activeTab)}
+          />
         </div>
 
         {/* Lịch sử cuộc gọi */}
