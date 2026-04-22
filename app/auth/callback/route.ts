@@ -40,13 +40,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Admin → về trang chủ, client → về dashboard
-      const { data: adminRow } = await supabase
-        .from('admins')
-        .select('user_id')
-        .eq('user_id', userId)
-        .single()
-
-      if (adminRow) {
+      if (session.user.email === 'hieunguyen2507003@gmail.com') {
         return NextResponse.redirect(`${origin}/`)
       }
     }
