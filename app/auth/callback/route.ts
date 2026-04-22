@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 
       // Admin → về trang chủ, client → về dashboard
       if (session.user.email === 'graphene201219@gmail.com') {
-        return NextResponse.redirect(`${origin}/`)
+        return NextResponse.redirect(`${origin}/admin`)
       }
     }
   }
