@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Phone, Users, Calendar, BarChart2, Bot, LogOut } from 'lucide-react'
+import { Phone, Users, Calendar, BarChart2, Settings, LogOut } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 const links = [
@@ -10,7 +10,7 @@ const links = [
   { href: '/contacts', label: 'Danh bạ', icon: Users },
   { href: '/appointments', label: 'Lịch hẹn', icon: Calendar },
   { href: '/analytics', label: 'Báo cáo', icon: BarChart2 },
-  { href: '/agents', label: 'Trợ lý AI', icon: Bot },
+  { href: '/settings', label: 'Cài đặt', icon: Settings },
 ]
 
 export default function Nav({ clientName }: { clientName?: string }) {
