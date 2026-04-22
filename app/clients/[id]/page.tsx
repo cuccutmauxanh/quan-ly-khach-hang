@@ -6,6 +6,7 @@ import { ArrowLeft, Phone, Mail, MessageCircle, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
 import ClientModal from '@/components/ClientModal'
+import { PageSkeleton } from '@/components/skeleton'
 
 function formatDate(s: string | null) {
   if (!s) return '--'
@@ -64,7 +65,7 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
 
   useEffect(() => { fetchData() }, [id])
 
-  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">Đang tải...</div>
+  if (loading) return <PageSkeleton />
   if (!client) return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">Không tìm thấy khách hàng.</div>
 
   const sta = STATUS_MAP[client.status ?? ''] ?? { label: client.status ?? '--', color: 'bg-gray-100 text-gray-600' }
