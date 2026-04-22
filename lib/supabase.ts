@@ -47,6 +47,8 @@ export type Call = {
   retell_call_id: string | null
   appointment_datetime: string | null
   appointment_notes: string | null
+  retry_count: number
+  retry_scheduled_at: string | null
   created_at: string
 }
 

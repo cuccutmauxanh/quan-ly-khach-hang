@@ -12,6 +12,19 @@ const DIRECTION_MAP: Record<string, { label: string; color: string }> = {
   outbound: { label: 'Gọi đi',  color: 'bg-green-100 text-green-700' },
 }
 
+function RetryBadge({ call }: { call: Call }) {
+  if (call.status !== 'no_answer') return null
+  const count = call.retry_count ?? 0
+  const maxed = count >= 3
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+      maxed ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'
+    }`}>
+      {maxed ? '✗ Không nghe' : `↻ Retry ${count}/3`}
+    </span>
+  )
+}
+
 function formatDateTime(s: string) {
   const d = new Date(s)
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
@@ -364,7 +377,7 @@ export default function DashboardPage() {
                     <th className="px-4 py-2 text-left">Khách</th>
                     <th className="px-4 py-2 text-left">Loại</th>
                     <th className="px-4 py-2 text-right">Thời lượng</th>
-                    <th className="px-4 py-2 text-center">Điểm</th>
+                    <th className="px-4 py-2 text-center">Kết quả</th>
                     <th className="px-4 py-2 text-left">Tóm tắt</th>
                   </tr>
                 </thead>
@@ -378,7 +391,9 @@ export default function DashboardPage() {
                         <td className="px-4 py-2.5 text-gray-700 text-xs">{c.contact_name || c.contact_phone || '--'}</td>
                         <td className="px-4 py-2.5"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${dir.color}`}>{dir.label}</span></td>
                         <td className="px-4 py-2.5 text-right text-gray-600 text-xs">{formatDuration(c.duration_seconds)}</td>
-                        <td className="px-4 py-2.5 text-center"><ScoreBadge score={score} /></td>
+                        <td className="px-4 py-2.5 text-center">
+                          {c.status === 'no_answer' ? <RetryBadge call={c} /> : <ScoreBadge score={score} />}
+                        </td>
                         <td className="px-4 py-2.5 text-gray-500 text-xs max-w-xs truncate">{c.summary ?? '--'}</td>
                       </tr>
                     )
