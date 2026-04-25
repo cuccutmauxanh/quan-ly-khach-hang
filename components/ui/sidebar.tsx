@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useTheme, useToggleDark } from './theme'
 import {
   IPhone, IUsers, ICalendar, IBarChart, ISettings, ILogOut,
-  IKanban, IBullhorn, ILightbulb, ILayers, IZap, IMail,
+  IKanban, IBullhorn, ILightbulb, ILayers, IZap, IMail, IMic,
   IMoon, ISun,
 } from './icons'
 
@@ -19,6 +19,7 @@ const NAV_ITEMS: {
   group: NavGroup; href: string | null
 }[] = [
   { id: 'dashboard',    label: 'Cuộc gọi',        Icon: IPhone,      group: 'main',      href: '/dashboard' },
+  { id: 'agents',       label: 'Trợ lý AI',        Icon: IMic,        group: 'main',      href: '/agents' },
   { id: 'contacts',     label: 'Data khách',       Icon: IUsers,      group: 'main',      href: '/contacts' },
   { id: 'pipeline',     label: 'Khách tiềm năng',  Icon: IKanban,     group: 'main',      href: null },
   { id: 'appointments', label: 'Lịch hẹn',         Icon: ICalendar,   group: 'main',      href: '/appointments' },
