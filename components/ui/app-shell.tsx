@@ -4,7 +4,7 @@ import React from 'react'
 import { Sidebar } from './sidebar'
 import { useTheme } from './theme'
 
-export function AppShell({ children, clientName }: {
+export default function AppShell({ children, clientName }: {
   children: React.ReactNode
   clientName?: string | null
 }) {

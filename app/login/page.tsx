@@ -23,24 +23,78 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-white flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-indigo-600">AutoVoice Pro</h1>
-          <p className="text-gray-500 text-sm mt-1">Đăng nhập để vào dashboard của bạn</p>
+    <div style={{
+      minHeight: '100vh',
+      background: '#f8f7f4',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 16,
+    }}>
+      <div style={{ width: '100%', maxWidth: 360 }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 48,
+            height: 48,
+            background: '#0c7c5e',
+            borderRadius: 12,
+            marginBottom: 14,
+          }}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.93a16 16 0 0 0 6.08 6.08l.93-.93a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.73 16.92z"/>
+            </svg>
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#1c1a17', margin: '0 0 6px' }}>AutoVoice Pro</h1>
+          <p style={{ fontSize: 14, color: '#6b6560', margin: 0 }}>Đăng nhập để vào dashboard của bạn</p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
+        <div style={{
+          background: '#fff',
+          borderRadius: 16,
+          border: '1px solid #e8e3d9',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+          padding: 24,
+        }}>
           {error && (
-            <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</div>
+            <div style={{
+              fontSize: 13,
+              color: '#dc2626',
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: 8,
+              padding: '8px 12px',
+              marginBottom: 16,
+            }}>
+              {error}
+            </div>
           )}
 
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition"
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              padding: '12px 16px',
+              border: '1px solid #e8e3d9',
+              borderRadius: 10,
+              background: '#fff',
+              fontSize: 14,
+              fontWeight: 500,
+              color: '#1c1a17',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+              transition: 'background 0.15s, border-color 0.15s',
+            }}
+            onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#f8f7f4' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff' }}
           >
-            {/* Google icon */}
             <svg width="18" height="18" viewBox="0 0 18 18">
               <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
               <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
@@ -50,7 +104,7 @@ export default function LoginPage() {
             {loading ? 'Đang chuyển hướng...' : 'Đăng nhập bằng Google'}
           </button>
 
-          <p className="text-xs text-center text-gray-400">
+          <p style={{ fontSize: 12, textAlign: 'center', color: '#9b9490', marginTop: 16, marginBottom: 0 }}>
             Chỉ tài khoản được cấp phép mới có thể đăng nhập
           </p>
         </div>

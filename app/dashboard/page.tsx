@@ -11,7 +11,7 @@ import {
 import * as XLSX from 'xlsx'
 import { PageSkeleton } from '@/components/skeleton'
 import { useToast } from '@/components/toast'
-import { AppShell } from '@/components/ui/app-shell'
+import AppShell from '@/components/ui/app-shell'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { useTheme } from '@/components/ui/theme'
 import { IPhone, IPhoneIn, IPhoneOut, ICalCheck } from '@/components/ui/icons'

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, type Client } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import Nav from '@/components/nav'
+import AppShell from '@/components/ui/app-shell'
 import { PageSkeleton } from '@/components/skeleton'
 import { useToast } from '@/components/toast'
 import { Save, Clock, Zap, Copy, Check, Calendar, Link2, RefreshCw } from 'lucide-react'
@@ -93,119 +93,115 @@ export default function SettingsPage() {
   if (loading) return <PageSkeleton />
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Nav clientName={client?.name} />
+    <AppShell clientName={client?.name}>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Cài đặt</h1>
+        <p className="text-sm text-gray-400 mt-0.5">Lịch làm việc và thông tin kết nối hệ thống</p>
+      </div>
 
-      <main className="max-w-4xl mx-auto px-4 py-6 space-y-5">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">Cài đặt</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Lịch làm việc và thông tin kết nối hệ thống</p>
-        </div>
+      <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1.5 w-fit" style={{ marginBottom: 20 }}>
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.key ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
 
-        <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1.5 w-fit">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.key ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>
-              {t.icon} {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Lịch làm việc */}
-        {tab === 'schedule' && (
-          <div className="space-y-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-5">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-indigo-600" />
-                <h2 className="font-semibold text-gray-800 text-sm">Lịch làm việc</h2>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600 mb-3 font-medium">Ngày làm việc trong tuần</p>
-                <div className="flex gap-2">
-                  {DAY_LABELS.map((label, i) => (
-                    <button key={i}
-                      onClick={() => setWorkDays(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i].sort())}
-                      className={`w-10 h-10 rounded-xl text-xs font-bold transition-all ${workDays.includes(i) ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2 font-medium">Giờ bắt đầu</label>
-                  <input type="time" value={workStart} onChange={e => setWorkStart(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2 font-medium">Giờ kết thúc</label>
-                  <input type="time" value={workEnd} onChange={e => setWorkEnd(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                </div>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
-                <span className="font-semibold">Lưu ý:</span> Hệ thống sẽ tự động gọi lại trong khung giờ và ngày làm việc đã cài đặt.
-              </div>
+      {/* Lịch làm việc */}
+      {tab === 'schedule' && (
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-5">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-indigo-600" />
+              <h2 className="font-semibold text-gray-800 text-sm">Lịch làm việc</h2>
             </div>
 
-            <div className="flex justify-end">
-              <SaveBtn status={scheduleSave} onClick={saveSchedule} label="Lưu lịch làm việc" />
-            </div>
-          </div>
-        )}
-
-        {/* Kết nối */}
-        {tab === 'connection' && (
-          <div className="space-y-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Link2 className="w-4 h-4 text-indigo-600" />
-                <h2 className="font-semibold text-gray-800 text-sm">Thông tin tài khoản</h2>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  { label: 'Tên phòng khám',  value: client?.name ?? '--' },
-                  { label: 'Số điện thoại AI', value: client?.retell_phone_number ?? 'Chưa cấu hình' },
-                  { label: 'Gói dịch vụ',      value: client?.package ?? 'Standard' },
-                  { label: 'Trạng thái',        value: client?.status ?? 'Đang hoạt động' },
-                ].map(item => (
-                  <div key={item.label} className="bg-gray-50 rounded-xl p-3.5">
-                    <p className="text-xs text-gray-400 mb-1">{item.label}</p>
-                    <p className="text-sm font-medium text-gray-700 break-all">{item.value}</p>
-                  </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-3 font-medium">Ngày làm việc trong tuần</p>
+              <div className="flex gap-2">
+                {DAY_LABELS.map((label, i) => (
+                  <button key={i}
+                    onClick={() => setWorkDays(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i].sort())}
+                    className={`w-10 h-10 rounded-xl text-xs font-bold transition-all ${workDays.includes(i) ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    {label}
+                  </button>
                 ))}
               </div>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <Zap className="w-4 h-4 text-indigo-600" />
-                <h2 className="font-semibold text-gray-800 text-sm">Webhook xử lý sau cuộc gọi</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-2 font-medium">Giờ bắt đầu</label>
+                <input type="time" value={workStart} onChange={e => setWorkStart(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
               </div>
-              <p className="text-sm text-gray-500 mb-3">
-                URL dùng để hệ thống tự động cập nhật kết quả sau mỗi cuộc gọi.
-              </p>
-              {client?.slug ? (
-                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-                  <code className="text-xs text-indigo-700 flex-1 break-all">
-                    {`https://letanai.tino.page/webhook/saas-post-call?client=${client.slug}`}
-                  </code>
-                  <button onClick={copyWebhook}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${copied ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600'}`}>
-                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copied ? 'Đã copy!' : 'Copy'}
-                  </button>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400 bg-gray-50 rounded-xl px-4 py-3">Liên hệ admin để cấu hình.</p>
-              )}
+              <div>
+                <label className="block text-sm text-gray-600 mb-2 font-medium">Giờ kết thúc</label>
+                <input type="time" value={workEnd} onChange={e => setWorkEnd(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
+              <span className="font-semibold">Lưu ý:</span> Hệ thống sẽ tự động gọi lại trong khung giờ và ngày làm việc đã cài đặt.
             </div>
           </div>
-        )}
-      </main>
-    </div>
+
+          <div className="flex justify-end">
+            <SaveBtn status={scheduleSave} onClick={saveSchedule} label="Lưu lịch làm việc" />
+          </div>
+        </div>
+      )}
+
+      {/* Kết nối */}
+      {tab === 'connection' && (
+        <div className="space-y-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Link2 className="w-4 h-4 text-indigo-600" />
+              <h2 className="font-semibold text-gray-800 text-sm">Thông tin tài khoản</h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { label: 'Tên phòng khám',  value: client?.name ?? '--' },
+                { label: 'Số điện thoại AI', value: client?.retell_phone_number ?? 'Chưa cấu hình' },
+                { label: 'Gói dịch vụ',      value: client?.package ?? 'Standard' },
+                { label: 'Trạng thái',        value: client?.status ?? 'Đang hoạt động' },
+              ].map(item => (
+                <div key={item.label} className="bg-gray-50 rounded-xl p-3.5">
+                  <p className="text-xs text-gray-400 mb-1">{item.label}</p>
+                  <p className="text-sm font-medium text-gray-700 break-all">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="w-4 h-4 text-indigo-600" />
+              <h2 className="font-semibold text-gray-800 text-sm">Webhook xử lý sau cuộc gọi</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-3">
+              URL dùng để hệ thống tự động cập nhật kết quả sau mỗi cuộc gọi.
+            </p>
+            {client?.slug ? (
+              <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                <code className="text-xs text-indigo-700 flex-1 break-all">
+                  {`https://letanai.tino.page/webhook/saas-post-call?client=${client.slug}`}
+                </code>
+                <button onClick={copyWebhook}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${copied ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-200 text-gray-600 hover:border-indigo-300 hover:text-indigo-600'}`}>
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? 'Đã copy!' : 'Copy'}
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 bg-gray-50 rounded-xl px-4 py-3">Liên hệ admin để cấu hình.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </AppShell>
   )
 }

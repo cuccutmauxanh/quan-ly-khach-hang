@@ -5,7 +5,7 @@ import { supabase, type Client, type Contact } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { UserPlus, Upload, X, Phone } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import Nav from '@/components/nav'
+import AppShell from '@/components/ui/app-shell'
 import { PageSkeleton } from '@/components/skeleton'
 import { useToast } from '@/components/toast'
 
@@ -158,9 +158,7 @@ export default function ContactsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Nav clientName={client?.name} />
-
+    <AppShell clientName={client?.name}>
       {showAdd && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
@@ -210,98 +208,96 @@ export default function ContactsPage() {
         </div>
       )}
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-800">Danh bạ</h2>
-          <div className="flex items-center gap-2">
-            <button onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-              <Upload className="w-4 h-4" /> Import Excel
-            </button>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportExcel} />
-            <button onClick={() => setShowAdd(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
-              <UserPlus className="w-4 h-4" /> Thêm liên hệ
-            </button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Danh bạ</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+            <Upload className="w-4 h-4" /> Import Excel
+          </button>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportExcel} />
+          <button onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+            <UserPlus className="w-4 h-4" /> Thêm liên hệ
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 pt-4 pb-0 flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-1">
+            {tabs.map(t => (
+              <button key={t.key} onClick={() => setFilter(t.key)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  filter === t.key ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
+                }`}>
+                {t.label}
+                <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${filter === t.key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
+                  {t.count}
+                </span>
+              </button>
+            ))}
           </div>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Tìm tên, số điện thoại..."
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-56" />
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 pt-4 pb-0 flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-1">
-              {tabs.map(t => (
-                <button key={t.key} onClick={() => setFilter(t.key)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    filter === t.key ? 'bg-indigo-50 text-indigo-600' : 'text-gray-500 hover:bg-gray-50'
-                  }`}>
-                  {t.label}
-                  <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${filter === t.key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
-                    {t.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Tìm tên, số điện thoại..."
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 w-56" />
+        {filtered.length === 0 ? (
+          <div className="p-10 text-center text-gray-400 text-sm">
+            {contacts.length === 0 ? 'Chưa có liên hệ. Thêm mới hoặc import từ Excel.' : 'Không tìm thấy liên hệ phù hợp.'}
           </div>
-
-          {filtered.length === 0 ? (
-            <div className="p-10 text-center text-gray-400 text-sm">
-              {contacts.length === 0 ? 'Chưa có liên hệ. Thêm mới hoặc import từ Excel.' : 'Không tìm thấy liên hệ phù hợp.'}
-            </div>
-          ) : (
-            <div className="overflow-x-auto mt-3">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left">Họ tên</th>
-                    <th className="px-4 py-2.5 text-left">Số điện thoại</th>
-                    <th className="px-4 py-2.5 text-left">Quan tâm</th>
-                    <th className="px-4 py-2.5 text-center">Số lần gọi</th>
-                    <th className="px-4 py-2.5 text-left">Gọi lần cuối</th>
-                    <th className="px-4 py-2.5 text-center">Lịch hẹn</th>
-                    <th className="px-4 py-2.5 text-center">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filtered.map(c => {
-                    const interest = c.interest_level ? INTEREST_LABELS[c.interest_level] : null
-                    const hasBooking = bookedIds.has(c.id)
-                    return (
-                      <tr key={c.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium text-gray-800">{c.full_name || '--'}</td>
-                        <td className="px-4 py-3 text-gray-600 font-mono text-xs">{c.phone}</td>
-                        <td className="px-4 py-3">
-                          {interest ? (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${interest.color}`}>{interest.label}</span>
-                          ) : '--'}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`text-xs font-semibold ${(c.call_count ?? 0) > 0 ? 'text-indigo-600' : 'text-gray-400'}`}>
-                            {c.call_count ?? 0}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(c.last_called_at)}</td>
-                        <td className="px-4 py-3 text-center text-xs">
-                          {hasBooking ? <span className="text-green-600 font-medium">✅ Đặt lịch</span> : <span className="text-gray-300">--</span>}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button onClick={() => handleCallContact(c)} disabled={callingId === c.id}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50">
-                            <Phone className="w-3 h-3" />
-                            {callingId === c.id ? '...' : 'Gọi'}
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
+        ) : (
+          <div className="overflow-x-auto mt-3">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-500">
+                <tr>
+                  <th className="px-4 py-2.5 text-left">Họ tên</th>
+                  <th className="px-4 py-2.5 text-left">Số điện thoại</th>
+                  <th className="px-4 py-2.5 text-left">Quan tâm</th>
+                  <th className="px-4 py-2.5 text-center">Số lần gọi</th>
+                  <th className="px-4 py-2.5 text-left">Gọi lần cuối</th>
+                  <th className="px-4 py-2.5 text-center">Lịch hẹn</th>
+                  <th className="px-4 py-2.5 text-center">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.map(c => {
+                  const interest = c.interest_level ? INTEREST_LABELS[c.interest_level] : null
+                  const hasBooking = bookedIds.has(c.id)
+                  return (
+                    <tr key={c.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-800">{c.full_name || '--'}</td>
+                      <td className="px-4 py-3 text-gray-600 font-mono text-xs">{c.phone}</td>
+                      <td className="px-4 py-3">
+                        {interest ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${interest.color}`}>{interest.label}</span>
+                        ) : '--'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`text-xs font-semibold ${(c.call_count ?? 0) > 0 ? 'text-indigo-600' : 'text-gray-400'}`}>
+                          {c.call_count ?? 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(c.last_called_at)}</td>
+                      <td className="px-4 py-3 text-center text-xs">
+                        {hasBooking ? <span className="text-green-600 font-medium">✅ Đặt lịch</span> : <span className="text-gray-300">--</span>}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => handleCallContact(c)} disabled={callingId === c.id}
+                          className="inline-flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50">
+                          <Phone className="w-3 h-3" />
+                          {callingId === c.id ? '...' : 'Gọi'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </AppShell>
   )
 }

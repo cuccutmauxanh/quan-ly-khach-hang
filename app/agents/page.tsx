@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase, type Client } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import Nav from '@/components/nav'
+import AppShell from '@/components/ui/app-shell'
 import { PageSkeleton } from '@/components/skeleton'
 import { useToast } from '@/components/toast'
 import {
@@ -23,7 +23,7 @@ const AGENTS: {
   description: string
   dbField: keyof Client
   icon: React.ElementType
-  tag: string        // màu tag (Tailwind full class)
+  tag: string
   tagBg: string
   tagText: string
   border: string
@@ -179,7 +179,6 @@ export default function AgentsPage() {
   const [client, setClient] = useState<Client | null>(null)
   const [expanded, setExpanded] = useState<AgentKey | null>(null)
 
-  // Per-agent data
   const [agentDataMap, setAgentDataMap] = useState<Partial<Record<AgentKey, AgentData>>>({})
   const [loadingMap, setLoadingMap] = useState<Partial<Record<AgentKey, boolean>>>({})
   const [promptMap, setPromptMap] = useState<Partial<Record<AgentKey, string>>>({})
@@ -269,162 +268,146 @@ export default function AgentsPage() {
   if (loading) return <PageSkeleton />
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Nav clientName={client?.name} />
+    <AppShell clientName={client?.name}>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Trợ lý AI</h1>
+        <p className="text-sm text-gray-400 mt-0.5">Cấu hình kịch bản giao tiếp cho từng loại cuộc gọi</p>
+      </div>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-
-        {/* Header */}
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">Trợ lý AI</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Cấu hình kịch bản giao tiếp cho từng loại cuộc gọi</p>
-        </div>
-
-        {/* 4 Agent Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {AGENTS.map(agent => {
-            const agentId = client?.[agent.dbField] as string | null
-            const isConfigured = !!agentId
-            const isExpanded = expanded === agent.key
-            const Icon = agent.icon
-
-            return (
-              <button
-                key={agent.key}
-                onClick={() => toggleExpand(agent.key)}
-                className={`text-left rounded-2xl border-2 p-4 transition-all hover:shadow-md ${
-                  isExpanded
-                    ? `${agent.border} ${agent.activeBg} shadow-md ring-2 ${agent.ring}`
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
-                {/* Tag màu */}
-                <div className="flex items-start justify-between mb-3">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white ${agent.tag}`}>
-                    <Icon className="w-3 h-3" />
-                    {agent.label}
-                  </span>
-                  {isExpanded
-                    ? <ChevronUp className="w-4 h-4 text-gray-400 mt-0.5" />
-                    : <ChevronDown className="w-4 h-4 text-gray-400 mt-0.5" />
-                  }
-                </div>
-
-                {/* Tên & mô tả */}
-                <p className="text-sm font-semibold text-gray-800 mb-1">{agent.sublabel}</p>
-                <p className="text-xs text-gray-500 leading-relaxed">{agent.description}</p>
-
-                {/* Trạng thái */}
-                <div className="mt-3 flex items-center gap-1.5">
-                  <div className={`w-2 h-2 rounded-full ${isConfigured ? agent.dotColor : 'bg-gray-300'}`} />
-                  <span className={`text-xs font-medium ${isConfigured ? agent.tagText : 'text-gray-400'}`}>
-                    {isConfigured ? 'Đã cấu hình' : 'Chưa cài đặt'}
-                  </span>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Expanded config panel */}
-        {expanded && (() => {
-          const agent = AGENTS.find(a => a.key === expanded)!
+      {/* 4 Agent Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" style={{ marginBottom: 20 }}>
+        {AGENTS.map(agent => {
           const agentId = client?.[agent.dbField] as string | null
-          const isLoading = loadingMap[expanded]
-          const prompt = promptMap[expanded] ?? ''
-          const greeting = greetingMap[expanded] ?? ''
-          const saveStatus = saveMap[expanded] ?? 'idle'
+          const isConfigured = !!agentId
+          const isExpanded = expanded === agent.key
           const Icon = agent.icon
 
           return (
-            <div className={`bg-white rounded-2xl border-2 ${agent.border} overflow-hidden shadow-sm`}>
-
-              {/* Panel header */}
-              <div className={`px-6 py-4 ${agent.tagBg} border-b ${agent.border} flex items-center justify-between`}>
-                <div className="flex items-center gap-3">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white ${agent.tag}`}>
-                    <Icon className="w-3 h-3" />
-                    {agent.label}
-                  </span>
-                  <h2 className={`font-semibold text-sm ${agent.tagText}`}>{agent.sublabel}</h2>
-                </div>
-                {isLoading && <RefreshCw className="w-4 h-4 text-gray-400 animate-spin" />}
+            <button
+              key={agent.key}
+              onClick={() => toggleExpand(agent.key)}
+              className={`text-left rounded-2xl border-2 p-4 transition-all hover:shadow-md ${
+                isExpanded
+                  ? `${agent.border} ${agent.activeBg} shadow-md ring-2 ${agent.ring}`
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white ${agent.tag}`}>
+                  <Icon className="w-3 h-3" />
+                  {agent.label}
+                </span>
+                {isExpanded
+                  ? <ChevronUp className="w-4 h-4 text-gray-400 mt-0.5" />
+                  : <ChevronDown className="w-4 h-4 text-gray-400 mt-0.5" />
+                }
               </div>
 
-              <div className="p-6 space-y-5">
+              <p className="text-sm font-semibold text-gray-800 mb-1">{agent.sublabel}</p>
+              <p className="text-xs text-gray-500 leading-relaxed">{agent.description}</p>
 
-                {/* Kịch bản giao tiếp */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-gray-500" />
-                      <label className="text-sm font-semibold text-gray-700">Kịch bản giao tiếp</label>
-                      <span className="text-xs text-gray-400">{prompt.length} ký tự</span>
-                    </div>
-                    <button
-                      onClick={() => applyDefault(expanded)}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium px-2.5 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
-                    >
-                      Dùng mẫu mặc định
-                    </button>
+              <div className="mt-3 flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-full ${isConfigured ? agent.dotColor : 'bg-gray-300'}`} />
+                <span className={`text-xs font-medium ${isConfigured ? agent.tagText : 'text-gray-400'}`}>
+                  {isConfigured ? 'Đã cấu hình' : 'Chưa cài đặt'}
+                </span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Expanded config panel */}
+      {expanded && (() => {
+        const agent = AGENTS.find(a => a.key === expanded)!
+        const agentId = client?.[agent.dbField] as string | null
+        const isLoading = loadingMap[expanded]
+        const prompt = promptMap[expanded] ?? ''
+        const greeting = greetingMap[expanded] ?? ''
+        const saveStatus = saveMap[expanded] ?? 'idle'
+        const Icon = agent.icon
+
+        return (
+          <div className={`bg-white rounded-2xl border-2 ${agent.border} overflow-hidden shadow-sm`}>
+            <div className={`px-6 py-4 ${agent.tagBg} border-b ${agent.border} flex items-center justify-between`}>
+              <div className="flex items-center gap-3">
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white ${agent.tag}`}>
+                  <Icon className="w-3 h-3" />
+                  {agent.label}
+                </span>
+                <h2 className={`font-semibold text-sm ${agent.tagText}`}>{agent.sublabel}</h2>
+              </div>
+              {isLoading && <RefreshCw className="w-4 h-4 text-gray-400 animate-spin" />}
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-gray-500" />
+                    <label className="text-sm font-semibold text-gray-700">Kịch bản giao tiếp</label>
+                    <span className="text-xs text-gray-400">{prompt.length} ký tự</span>
                   </div>
-                  <textarea
-                    value={prompt}
-                    onChange={e => setPromptMap(p => ({ ...p, [expanded]: e.target.value }))}
-                    rows={12}
-                    placeholder="Mô tả cách AI cần hoạt động: vai trò, nhiệm vụ, phong cách giao tiếp, những điều không được làm..."
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none font-mono leading-relaxed"
-                    disabled={!agentId}
-                  />
-                  {!agentId && (
-                    <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
-                      ⚠ Chưa có mã trợ lý — liên hệ admin để cài đặt
-                    </p>
-                  )}
-                </div>
-
-                {/* Câu mở đầu */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <MessageSquare className="w-4 h-4 text-gray-500" />
-                    <label className="text-sm font-semibold text-gray-700">Câu mở đầu cuộc gọi</label>
-                  </div>
-                  <textarea
-                    value={greeting}
-                    onChange={e => setGreetingMap(p => ({ ...p, [expanded]: e.target.value }))}
-                    rows={3}
-                    placeholder="Để trống → AI tự chọn câu mở đầu phù hợp. Ví dụ: Xin chào! Đây là Nha Khoa ABC, tôi có thể giúp gì cho bạn?"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
-                    disabled={!agentId}
-                  />
-                </div>
-
-                {/* Save */}
-                <div className="flex justify-end">
                   <button
-                    onClick={() => saveAgent(expanded)}
-                    disabled={!agentId || saveStatus === 'saving' || saveStatus === 'ok'}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 ${
-                      saveStatus === 'ok'    ? 'bg-green-600 text-white' :
-                      saveStatus === 'error' ? 'bg-red-600 text-white' :
-                      saveStatus === 'saving' ? 'bg-indigo-400 text-white cursor-not-allowed' :
-                      'bg-indigo-600 hover:bg-indigo-700 text-white'
-                    }`}
+                    onClick={() => applyDefault(expanded)}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium px-2.5 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
                   >
-                    {saveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> :
-                     saveStatus === 'ok'     ? <Check className="w-4 h-4" /> :
-                     <Save className="w-4 h-4" />}
-                    {saveStatus === 'saving' ? 'Đang lưu...' :
-                     saveStatus === 'ok'     ? 'Đã lưu!' :
-                     saveStatus === 'error'  ? 'Lỗi — thử lại' : 'Lưu kịch bản'}
+                    Dùng mẫu mặc định
                   </button>
                 </div>
+                <textarea
+                  value={prompt}
+                  onChange={e => setPromptMap(p => ({ ...p, [expanded]: e.target.value }))}
+                  rows={12}
+                  placeholder="Mô tả cách AI cần hoạt động: vai trò, nhiệm vụ, phong cách giao tiếp, những điều không được làm..."
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none font-mono leading-relaxed"
+                  disabled={!agentId}
+                />
+                {!agentId && (
+                  <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
+                    ⚠ Chưa có mã trợ lý — liên hệ admin để cài đặt
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageSquare className="w-4 h-4 text-gray-500" />
+                  <label className="text-sm font-semibold text-gray-700">Câu mở đầu cuộc gọi</label>
+                </div>
+                <textarea
+                  value={greeting}
+                  onChange={e => setGreetingMap(p => ({ ...p, [expanded]: e.target.value }))}
+                  rows={3}
+                  placeholder="Để trống → AI tự chọn câu mở đầu phù hợp. Ví dụ: Xin chào! Đây là Nha Khoa ABC, tôi có thể giúp gì cho bạn?"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                  disabled={!agentId}
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => saveAgent(expanded)}
+                  disabled={!agentId || saveStatus === 'saving' || saveStatus === 'ok'}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 ${
+                    saveStatus === 'ok'    ? 'bg-green-600 text-white' :
+                    saveStatus === 'error' ? 'bg-red-600 text-white' :
+                    saveStatus === 'saving' ? 'bg-indigo-400 text-white cursor-not-allowed' :
+                    'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  }`}
+                >
+                  {saveStatus === 'saving' ? <RefreshCw className="w-4 h-4 animate-spin" /> :
+                   saveStatus === 'ok'     ? <Check className="w-4 h-4" /> :
+                   <Save className="w-4 h-4" />}
+                  {saveStatus === 'saving' ? 'Đang lưu...' :
+                   saveStatus === 'ok'     ? 'Đã lưu!' :
+                   saveStatus === 'error'  ? 'Lỗi — thử lại' : 'Lưu kịch bản'}
+                </button>
               </div>
             </div>
-          )
-        })()}
-
-      </main>
-    </div>
+          </div>
+        )
+      })()}
+    </AppShell>
   )
 }
