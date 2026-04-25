@@ -9,9 +9,12 @@ import {
   Check, Save, Sparkles, MessageSquare, Settings2,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import Nav from '@/components/nav'
 import { PageSkeleton } from '@/components/skeleton'
 import { useToast } from '@/components/toast'
+import { AppShell } from '@/components/ui/app-shell'
+import { KpiCard } from '@/components/ui/kpi-card'
+import { useTheme } from '@/components/ui/theme'
+import { IPhone, IPhoneIn, IPhoneOut, ICalCheck } from '@/components/ui/icons'
 
 // ─── Agent tab definitions ───────────────────────────────────────────────────
 
@@ -185,19 +188,6 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
 
 // ─── Agent Edit Modal (popup) ─────────────────────────────────────────────────
 
-const MAX_DURATION_OPTIONS = [
-  { label: 'Không giới hạn', value: null },
-  { label: '3 phút',  value: 3 * 60 * 1000 },
-  { label: '5 phút',  value: 5 * 60 * 1000 },
-  { label: '10 phút', value: 10 * 60 * 1000 },
-  { label: '15 phút', value: 15 * 60 * 1000 },
-]
-const REMINDER_OPTIONS = [
-  { label: '2 giây',  value: 2000 },
-  { label: '3 giây',  value: 3000 },
-  { label: '5 giây',  value: 5000 },
-  { label: '10 giây', value: 10000 },
-]
 
 function AgentModal({
   tabDef, client, open, onClose,
@@ -210,11 +200,13 @@ function AgentModal({
 }: {
   tabDef: typeof TABS[0]; client: Client | null; open: boolean; onClose: () => void
   agentData: AgentData | null; loadingAgent: boolean
-  prompt: string; greeting: string; responsiveness: number; maxDuration: number | null; reminderMs: number
+  prompt: string; greeting: string; responsiveness: number
+  maxDuration: number | null; reminderMs: number
   saveStatus: SaveStatus
   onFetch: () => void
   onPromptChange: (v: string) => void; onGreetingChange: (v: string) => void
-  onResponsivenessChange: (v: number) => void; onMaxDurationChange: (v: number | null) => void; onReminderChange: (v: number) => void
+  onResponsivenessChange: (v: number) => void
+  onMaxDurationChange: (v: number | null) => void; onReminderChange: (v: number) => void
   onSave: () => void; onApplyDefault: () => void
 }) {
   const agentId = client?.[tabDef.agentField] as string | null
@@ -335,42 +327,6 @@ function AgentModal({
                     </div>
                   </div>
 
-                  {/* Max duration + Reminder — 2 cột */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                        Tự kết thúc sau
-                      </label>
-                      <select
-                        value={maxDuration ?? 'null'}
-                        onChange={e => onMaxDurationChange(e.target.value === 'null' ? null : Number(e.target.value))}
-                        disabled={!agentId}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50 bg-white"
-                      >
-                        {MAX_DURATION_OPTIONS.map(o => (
-                          <option key={String(o.value)} value={String(o.value)}>{o.label}</option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-400 mt-1">Giới hạn thời lượng tối đa</p>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                        Nhắc khi khách im lặng
-                      </label>
-                      <select
-                        value={reminderMs}
-                        onChange={e => onReminderChange(Number(e.target.value))}
-                        disabled={!agentId}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50 bg-white"
-                      >
-                        {REMINDER_OPTIONS.map(o => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-400 mt-1">Hỏi lại sau X giây không nghe</p>
-                    </div>
-                  </div>
 
                 </div>
               </div>
@@ -925,29 +881,23 @@ export default function DashboardPage() {
   const tabDef   = TABS.find(t => t.key === activeTab)!
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <AppShell clientName={client?.name}>
       {selectedCall && <CallDetailModal call={selectedCall} onClose={() => setSelectedCall(null)} />}
-      <Nav clientName={client?.name} />
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+      {/* Page header */}
+      <DashHeader lastRefresh={lastRefresh} />
 
-        {/* KPI */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Hôm nay', value: today,   icon: <Phone className="w-5 h-5 text-indigo-600" />,  bg: 'bg-indigo-50' },
-            { label: 'Gọi đến', value: inbound,  icon: <PhoneIncoming className="w-5 h-5 text-emerald-600" />, bg: 'bg-emerald-50' },
-            { label: 'Gọi đi',  value: outbound, icon: <PhoneOutgoing className="w-5 h-5 text-blue-600" />,    bg: 'bg-blue-50' },
-            { label: 'Đặt lịch',value: booked,   icon: <CalendarCheck className="w-5 h-5 text-violet-600" />,  bg: 'bg-violet-50' },
-          ].map(k => (
-            <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3">
-              <div className={`p-2.5 rounded-lg ${k.bg}`}>{k.icon}</div>
-              <div><p className="text-xs text-gray-500">{k.label}</p><p className="text-2xl font-bold text-gray-800">{k.value}</p></div>
-            </div>
-          ))}
-        </div>
+      {/* KPI */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 28 }}>
+        <KpiCard label="Hôm nay"  value={today}   icon={<IPhone size={15}/>}    accentColor="#0c7c5e" delta="+3 so với hôm qua" />
+        <KpiCard label="Gọi đến"  value={inbound}  icon={<IPhoneIn size={15}/>}  accentColor="#059669" />
+        <KpiCard label="Gọi đi"   value={outbound} icon={<IPhoneOut size={15}/>} accentColor="#2563eb" />
+        <KpiCard label="Đặt lịch" value={booked}   icon={<ICalCheck size={15}/>} accentColor="#7c3aed"
+          delta={`${calls.length ? Math.round(booked / calls.length * 100) : 0}% tỉ lệ`} />
+      </div>
 
-        {/* Main call panel */}
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      {/* Main call panel */}
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden" style={{ marginBottom: 20 }}>
 
           {/* Tab bar */}
           <div className="flex border-b border-gray-200">
@@ -1061,7 +1011,25 @@ export default function DashboardPage() {
           )}
         </div>
 
-      </main>
+    </AppShell>
+  )
+}
+
+// ── Dashboard header (needs useTheme — separate component) ────────────────────
+
+function DashHeader({ lastRefresh }: { lastRefresh: Date | null }) {
+  const t = useTheme()
+  const now = new Date()
+  const dateStr = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: t.text1, letterSpacing: '-0.02em', margin: 0 }}>
+        Trung tâm cuộc gọi
+      </h1>
+      <p style={{ fontSize: 13, color: t.text3, marginTop: 4 }}>
+        {dateStr} · Tự động cập nhật mỗi 30 giây
+        {lastRefresh && ` · Lần cuối ${String(lastRefresh.getHours()).padStart(2,'0')}:${String(lastRefresh.getMinutes()).padStart(2,'0')}`}
+      </p>
     </div>
   )
 }
