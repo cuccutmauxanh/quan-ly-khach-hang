@@ -180,6 +180,29 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
             </div>
           )}
           {call.summary && <div><p className="text-xs font-semibold text-gray-500 mb-2">📋 Tóm tắt</p><p className="text-sm text-gray-700 bg-gray-50 rounded-xl p-4 leading-relaxed">{call.summary}</p></div>}
+          {call.recording_url && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">🎙 Ghi âm</p>
+              <audio controls src={call.recording_url} className="w-full h-10 rounded-xl" />
+            </div>
+          )}
+          {call.transcript && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">💬 Nội dung cuộc gọi</p>
+              <div className="bg-gray-50 rounded-xl p-4 max-h-48 overflow-y-auto">
+                {call.transcript.split('\n').map((line, i) => {
+                  const isAgent = line.startsWith('Agent:')
+                  const isUser = line.startsWith('User:')
+                  if (!line.trim()) return null
+                  return (
+                    <p key={i} className={`text-xs mb-1.5 leading-relaxed ${isAgent ? 'text-blue-700' : isUser ? 'text-gray-700' : 'text-gray-400'}`}>
+                      {line}
+                    </p>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
