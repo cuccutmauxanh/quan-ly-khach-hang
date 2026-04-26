@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { supabase, type Client, type Call, type Contact } from '@/lib/supabase'
+import { supabase, type Client, type Call, type Contact, type Appointment } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import {
   Phone, PhoneIncoming, PhoneOutgoing, CalendarCheck,
@@ -1000,6 +1000,153 @@ function WarmLeadsTab({ client, contacts }: { client: Client | null; contacts: C
   )
 }
 
+// ─── Copilot Panel ────────────────────────────────────────────────────────────
+
+const COPILOT_SCRIPTS = [
+  { id: 'price',      trigger: '💰 Hỏi về giá',     answer: 'Giá điều trị phụ thuộc vào tình trạng răng cụ thể của anh/chị. Bên em có khám và tư vấn miễn phí để đánh giá chính xác nhất. Anh/chị muốn đặt lịch khám thử không?' },
+  { id: 'braces',     trigger: '😁 Niềng răng',      answer: 'Phòng khám có niềng trong suốt Invisalign và niềng mắc cài kim loại/sứ. Thời gian trung bình 12–24 tháng tùy tình trạng. Anh/chị đến tư vấn miễn phí với bác sĩ chuyên khoa nhé!' },
+  { id: 'implant',    trigger: '🔩 Implant',          answer: 'Implant là giải pháp trồng răng vĩnh viễn, giống răng thật nhất hiện nay. Bên em dùng Implant chính hãng, bảo hành trọn đời. Anh/chị đến khám để bác sĩ đánh giá xương hàm — miễn phí hoàn toàn.' },
+  { id: 'pain',       trigger: '🚨 Đang đau răng',   answer: 'Em rất tiếc khi nghe điều đó! Phòng khám luôn ưu tiên xử lý khẩn cấp. Anh/chị có thể đến ngay hôm nay không? Bác sĩ sẽ tiếp ngay khi anh/chị đến.' },
+  { id: 'whitening',  trigger: '✨ Tẩy trắng',        answer: 'Bên em có tẩy trắng công nghệ Laser, không ê buốt, hiệu quả sau 1 buổi chỉ 45 phút. Đang có ưu đãi giảm 20% cho khách đặt lịch trong tháng này. Anh/chị muốn em giữ lịch không?' },
+  { id: 'reschedule', trigger: '📅 Đổi lịch hẹn',   answer: 'Dạ không sao anh/chị. Anh/chị muốn dời sang ngày nào và khung giờ nào thì tiện nhất ạ? Bên em mở từ thứ 2 đến thứ 7, 8h sáng đến 17h30.' },
+  { id: 'busy',       trigger: '⏰ Đang bận',         answer: 'Dạ em hiểu ạ. Vậy anh/chị tiện nhất vào thời điểm nào để em gọi lại? Sáng hay chiều ạ?' },
+  { id: 'callback',   trigger: '📞 Hẹn gọi lại',     answer: 'Dạ bên em ghi nhận rồi. Em sẽ gọi lại cho anh/chị vào [thời gian]. Anh/chị có số điện thoại nào khác để liên lạc không ạ?' },
+]
+
+function generateTimeSlots(date: Date, appointments: Appointment[]) {
+  const dayStr = date.toDateString()
+  const booked = new Set<string>()
+  appointments.forEach(a => {
+    if (a.scheduled_at && new Date(a.scheduled_at).toDateString() === dayStr && a.status !== 'cancelled') {
+      const d = new Date(a.scheduled_at)
+      booked.add(`${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`)
+    }
+  })
+  const slots: { time: string; label: string; booked: boolean }[] = []
+  for (let h = 8; h <= 17; h++) {
+    for (const m of [0, 30]) {
+      if (h === 17 && m === 30) continue
+      const time = `${h}:${String(m).padStart(2, '0')}`
+      slots.push({ time, label: `${h}h${m === 30 ? '30' : '00'}`, booked: booked.has(time) })
+    }
+  }
+  return slots
+}
+
+function CopilotPanel({ appointments, onClose }: { appointments: Appointment[]; onClose: () => void }) {
+  const [tab, setTab]       = useState<'script' | 'slots' | 'notes'>('script')
+  const [copied, setCopied] = useState<string | null>(null)
+  const [note, setNote]     = useState('')
+  const [slotDay, setSlotDay] = useState<'today' | 'tomorrow'>('today')
+
+  function copyText(text: string, id: string) {
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopied(id)
+    setTimeout(() => setCopied(null), 1800)
+  }
+
+  const today = new Date()
+  const slots = generateTimeSlots(slotDay === 'today' ? today : new Date(today.getTime() + 86400000), appointments)
+  const freeCount = slots.filter(s => !s.booked).length
+
+  return (
+    <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm overflow-hidden flex flex-col" style={{ minHeight: 400 }}>
+      <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">🤖</span>
+          <span className="text-sm font-bold text-indigo-700">Co-pilot AI</span>
+          <span className="text-xs text-indigo-400 hidden lg:inline">Trợ lý thời gian thực</span>
+        </div>
+        <button onClick={onClose} className="p-1 hover:bg-indigo-100 rounded-lg transition-colors">
+          <X className="w-3.5 h-3.5 text-indigo-400" />
+        </button>
+      </div>
+
+      <div className="flex border-b border-gray-100 shrink-0">
+        {[
+          { k: 'script' as const, l: 'Script' },
+          { k: 'slots'  as const, l: `Lịch (${freeCount})` },
+          { k: 'notes'  as const, l: 'Ghi chú' },
+        ].map(t => (
+          <button key={t.k} onClick={() => setTab(t.k)}
+            className={`flex-1 py-2 text-xs font-semibold transition-colors ${tab === t.k ? 'text-indigo-600 border-b-2 border-indigo-500' : 'text-gray-400 hover:text-gray-600'}`}>
+            {t.l}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-3 overflow-y-auto flex-1">
+
+        {tab === 'script' && (
+          <div className="space-y-2">
+            <p className="text-xs text-gray-400 mb-2">Chọn tình huống → copy câu trả lời</p>
+            {COPILOT_SCRIPTS.map(s => (
+              <button key={s.id} onClick={() => copyText(s.answer, s.id)}
+                className={`w-full text-left rounded-xl border p-3 transition-all ${copied === s.id ? 'border-green-300 bg-green-50' : 'border-gray-100 hover:border-indigo-200 hover:bg-indigo-50'}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-semibold text-gray-700">{s.trigger}</span>
+                  <span className={`text-xs font-medium shrink-0 ml-2 ${copied === s.id ? 'text-green-600' : 'text-indigo-400'}`}>
+                    {copied === s.id ? '✓ Copied' : 'Copy'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{s.answer}</p>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab === 'slots' && (
+          <div>
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-3">
+              {[{ k: 'today' as const, l: 'Hôm nay' }, { k: 'tomorrow' as const, l: 'Ngày mai' }].map(d => (
+                <button key={d.k} onClick={() => setSlotDay(d.k)}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${slotDay === d.k ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>
+                  {d.l}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {slots.map(s => (
+                <button key={s.time} onClick={() => !s.booked && copyText(s.label, `slot-${s.time}`)} disabled={s.booked}
+                  className={`py-2 rounded-xl text-xs font-semibold text-center transition-all ${
+                    s.booked                       ? 'bg-red-50 text-red-300 cursor-not-allowed' :
+                    copied === `slot-${s.time}`    ? 'bg-green-100 text-green-700 border border-green-300' :
+                    'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100'
+                  }`}>
+                  {s.label}
+                  {s.booked && <span className="block text-xs font-normal opacity-60">đã đặt</span>}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-2 text-center">Click slot trống để copy giờ</p>
+          </div>
+        )}
+
+        {tab === 'notes' && (
+          <div className="space-y-3">
+            <p className="text-xs text-gray-400">Ghi chú trong lúc nghe máy</p>
+            <textarea value={note} onChange={e => setNote(e.target.value)}
+              placeholder="VD: Khách hỏi niềng răng, muốn khám thứ 7 sáng, quan tâm giá. Hẹn gọi lại 14h..."
+              rows={8}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none placeholder-gray-300 leading-relaxed" />
+            <div className="flex gap-2">
+              <button onClick={() => copyText(note, 'notes')} disabled={!note}
+                className="flex-1 py-2 text-xs font-semibold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-colors disabled:opacity-40">
+                {copied === 'notes' ? '✓ Đã copy' : '📋 Copy ghi chú'}
+              </button>
+              <button onClick={() => setNote('')} disabled={!note}
+                className="px-3 py-2 text-xs text-gray-400 hover:text-red-500 border border-gray-200 rounded-xl transition-colors disabled:opacity-40">
+                Xóa
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -1009,10 +1156,12 @@ export default function DashboardPage() {
   const [client, setClient] = useState<Client | null>(null)
   const [calls, setCalls] = useState<Call[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<AgentTab>('receptionist')
   const [selectedCall, setSelectedCall] = useState<Call | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [showCopilot, setShowCopilot] = useState(false)
   const clientIdRef = useRef<string | null>(null)
 
   // ── Agent config state ──────────────────────────────────────────────────────
@@ -1042,6 +1191,16 @@ export default function DashboardPage() {
     setContacts(data ?? [])
   }, [])
 
+  const fetchAppointments = useCallback(async (clientId: string) => {
+    const from = new Date(); from.setHours(0, 0, 0, 0)
+    const to   = new Date(from.getTime() + 2 * 86400000)
+    const { data } = await supabase.from('appointments').select('*')
+      .eq('tenant_id', clientId)
+      .gte('scheduled_at', from.toISOString())
+      .lte('scheduled_at', to.toISOString())
+    setAppointments(data ?? [])
+  }, [])
+
   useEffect(() => {
     async function init() {
       setLoading(true)
@@ -1052,11 +1211,11 @@ export default function DashboardPage() {
       clientIdRef.current = cu.client_id
       const { data: c } = await supabase.from('clients').select('*').eq('id', cu.client_id).single()
       setClient(c)
-      await Promise.all([fetchCalls(cu.client_id), fetchContacts(cu.client_id)])
+      await Promise.all([fetchCalls(cu.client_id), fetchContacts(cu.client_id), fetchAppointments(cu.client_id)])
       setLoading(false)
     }
     init()
-  }, [router, fetchCalls, fetchContacts])
+  }, [router, fetchCalls, fetchContacts, fetchAppointments])
 
   useEffect(() => {
     const interval = setInterval(() => { if (clientIdRef.current) fetchCalls(clientIdRef.current) }, 30000)
@@ -1156,8 +1315,9 @@ export default function DashboardPage() {
           delta={`${calls.length ? Math.round(booked / calls.length * 100) : 0}% tỉ lệ`} />
       </div>
 
-      {/* Main call panel */}
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden" style={{ marginBottom: 20 }}>
+      {/* Main call panel + Co-pilot */}
+      <div className="flex gap-4 items-start" style={{ marginBottom: 20 }}>
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden flex-1 min-w-0">
 
           {/* Tab bar */}
           <div className="flex border-b border-gray-200">
@@ -1181,8 +1341,16 @@ export default function DashboardPage() {
 
           {/* Tab content */}
           <div className="p-4">
-            {/* Nút mở popup cài đặt AI — góc trên phải */}
-            <div className="flex justify-end mb-3">
+            {/* Toolbar góc trên phải */}
+            <div className="flex items-center justify-end gap-2 mb-3">
+              {activeTab === 'receptionist' && (
+                <button
+                  onClick={() => setShowCopilot(p => !p)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all hover:shadow-sm ${showCopilot ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 text-indigo-600 border-indigo-200 hover:bg-indigo-100'}`}
+                >
+                  🤖 Co-pilot{showCopilot ? ' ✕' : ''}
+                </button>
+              )}
               <button
                 onClick={() => setConfigOpen(true)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all hover:shadow-sm ${tabDef.tagBg} ${tabDef.tagText} ${tabDef.border}`}
@@ -1222,6 +1390,14 @@ export default function DashboardPage() {
             onApplyDefault={() => applyDefault(activeTab)}
           />
         </div>
+
+      {/* Co-pilot panel */}
+      {showCopilot && activeTab === 'receptionist' && (
+        <div className="shrink-0" style={{ width: 288 }}>
+          <CopilotPanel appointments={appointments} onClose={() => setShowCopilot(false)} />
+        </div>
+      )}
+      </div>{/* end flex wrapper */}
 
         {/* Lịch sử cuộc gọi */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
