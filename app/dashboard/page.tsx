@@ -114,6 +114,34 @@ Lưu ý: Khách đã có ý định — đừng giới thiệu dài, tập trung
   },
 ]
 
+// ─── Campaigns & Objection Handling ─────────────────────────────────────────
+
+type Campaign = {
+  id: string
+  name: string
+  description: string
+  target: string
+  color: string
+  accent: string
+  agentField: keyof Client
+}
+
+const CAMPAIGNS: Campaign[] = [
+  { id: 'voucher_cao_rang', name: 'Voucher lấy cao răng 0đ', description: 'Tặng voucher lấy cao răng miễn phí cho khách mới', target: 'Data lạnh khu vực gần phòng khám', color: 'bg-blue-50 border-blue-200', accent: 'text-blue-700', agentField: 'agent_cold_id' },
+  { id: 'implant_thang4', name: 'Implant tháng 4 ưu đãi', description: 'Ưu đãi 30% cấy ghép Implant, chỉ trong tháng 4', target: 'Khách từng hỏi về mất răng/Implant', color: 'bg-violet-50 border-violet-200', accent: 'text-violet-700', agentField: 'agent_warm_id' },
+  { id: 'tay_trang', name: 'Tẩy trắng răng ưu đãi', description: 'Combo tẩy trắng + lấy cao răng giá đặc biệt', target: 'Nữ 25-45 tuổi, quan tâm thẩm mỹ', color: 'bg-pink-50 border-pink-200', accent: 'text-pink-700', agentField: 'agent_cold_id' },
+  { id: 'khao_sat', name: 'Khám sức khỏe răng miệng', description: 'Khám + tư vấn miễn phí — không áp lực mua', target: 'Data lạnh tổng hợp', color: 'bg-emerald-50 border-emerald-200', accent: 'text-emerald-700', agentField: 'agent_cold_id' },
+]
+
+const OBJECTIONS = [
+  { trigger: '🚫 "Tôi đang bận"', color: 'border-orange-200 bg-orange-50', accent: 'text-orange-700', response: 'Dạ em hiểu ạ! Em chỉ xin phép nói nhanh 30 giây thôi. Nha Khoa đang có ưu đãi đặc biệt chỉ đến cuối tuần — anh/chị có muốn em nhắn thông tin để xem thư thả không ạ?' },
+  { trigger: '💰 "Không có tiền"', color: 'border-red-200 bg-red-50', accent: 'text-red-700', response: 'Dạ không sao ạ! Bên em có chương trình MIỄN PHÍ — chỉ cần anh/chị đến để bác sĩ tư vấn, không có bất kỳ phí nào ạ. Anh/chị có thể sắp xếp 30 phút không ạ?' },
+  { trigger: '🦷 "Đang làm ở nơi khác"', color: 'border-blue-200 bg-blue-50', accent: 'text-blue-700', response: 'Dạ vâng ạ! Bên em không mời anh/chị chuyển — chỉ muốn tặng buổi khám định kỳ miễn phí. Dù đang điều trị ở đâu, kiểm tra định kỳ vẫn rất quan trọng ạ!' },
+  { trigger: '⏰ "Gọi lại sau đi"', color: 'border-gray-200 bg-gray-50', accent: 'text-gray-700', response: 'Dạ vâng! Vậy em xin phép gọi lại — chiều nay 15h hay sáng mai 9h tiện hơn cho anh/chị ạ? Em sẽ ghi lịch và gọi đúng giờ ạ.' },
+  { trigger: '😤 "Đừng gọi nữa"', color: 'border-gray-200 bg-gray-50', accent: 'text-gray-500', response: 'Dạ vâng, em xin lỗi vì đã làm phiền ạ! Em sẽ ghi lại và không liên hệ lại. Nếu sau này anh/chị có nhu cầu, Nha Khoa luôn sẵn sàng hỗ trợ. Chúc anh/chị ngày tốt lành!' },
+  { trigger: '🤔 "Để tôi suy nghĩ"', color: 'border-amber-200 bg-amber-50', accent: 'text-amber-700', response: 'Dạ vâng ạ! Điều đó hoàn toàn tự nhiên. Anh/chị có thể cho em biết điều gì khiến anh/chị còn phân vân không ạ? Có thể em giải đáp được ngay ạ.' },
+]
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDateTime(s: string) {
@@ -662,9 +690,10 @@ function ReceptionistTab({ calls, client, contacts, onQuickCall }: {
 
 // ─── Tab: Telesale Lạnh ───────────────────────────────────────────────────────
 
-function ColdCallTab({ client }: { client: Client | null }) {
+function ColdCallTab({ client, calls }: { client: Client | null; calls: Call[] }) {
   const { toast } = useToast()
   const [mode, setMode] = useState<'single' | 'batch'>('single')
+  const [callMode, setCallMode] = useState<'ai' | 'human'>('ai')
   const [phone, setPhone] = useState('')
   const [name, setName] = useState('')
   const [callingSingle, setCallingSingle] = useState(false)
@@ -673,18 +702,34 @@ function ColdCallTab({ client }: { client: Client | null }) {
   const [calling, setCalling] = useState(false)
   const [callingIndex, setCallingIndex] = useState<number | null>(null)
   const [callResults, setCallResults] = useState<{ phone: string; success: boolean; error?: string | null }[]>([])
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
+  const [showObjHandler, setShowObjHandler] = useState(false)
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const agentId = client?.agent_cold_id ?? client?.retell_agent_id
+
+  const agentId = selectedCampaign
+    ? (client?.[selectedCampaign.agentField] as string | null)
+    : (client?.agent_cold_id ?? client?.retell_agent_id)
   const fromNumber = client?.retell_phone_number
+
+  const coldCalls = calls.filter(c => c.direction === 'outbound')
+  const noAnswerCalls = coldCalls.filter(c => c.status === 'no_answer')
+  const hotLeads = coldCalls.filter(c => calcScore(c) >= 70 && c.status !== 'no_answer')
+
+  function nextRetryTime() {
+    const h = new Date().getHours()
+    return h < 13 ? 'Hôm nay 14:00' : 'Ngày mai 09:00'
+  }
 
   async function callSingle() {
     if (!phone.trim()) { toast('Nhập số điện thoại', 'error'); return }
+    if (callMode === 'human') { toast(`Gọi thủ công: ${phone}`, 'success'); return }
     if (!agentId || !fromNumber) { toast('Chưa cấu hình — liên hệ admin', 'error'); return }
     setCallingSingle(true)
     try {
       const res = await fetch('/api/outbound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones: [{ name, phone: phone.replace(/\D/g,'') }], agentId, fromNumber }) })
       const d = await res.json()
-      if (d.results?.[0]?.success) { toast(`Đang gọi ${phone}`, 'success'); setPhone(''); setName('') }
+      if (d.results?.[0]?.success) { toast(`AI đang gọi ${phone}`, 'success'); setPhone(''); setName('') }
       else toast(d.results?.[0]?.error ?? 'Gọi thất bại', 'error')
     } catch { toast('Lỗi kết nối', 'error') }
     setCallingSingle(false)
@@ -714,19 +759,91 @@ function ColdCallTab({ client }: { client: Client | null }) {
 
   async function callAll() {
     if (!agentId || !fromNumber) { toast('Chưa cấu hình', 'error'); return }
-    if (!confirm(`Xác nhận gọi ${outboundList.length} số?`)) return
+    if (!confirm(`Xác nhận AI gọi ${outboundList.length} số?`)) return
     setCalling(true); setCallResults([])
     const res = await fetch('/api/outbound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phones: outboundList, agentId, fromNumber }) })
     const d = await res.json(); setCallResults(d.results ?? []); setCalling(false)
   }
 
+  function copyRebuttal(text: string, idx: number) {
+    navigator.clipboard.writeText(text)
+    setCopiedIdx(idx)
+    setTimeout(() => setCopiedIdx(null), 2000)
+  }
+
   return (
     <div className="space-y-4">
+
+      {/* ── Campaign selector + Objection toggle ── */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+        <div className="flex items-start gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-xs font-semibold text-blue-700 mb-1.5">Chiến dịch đang chạy</p>
+            <select
+              value={selectedCampaign?.id ?? ''}
+              onChange={e => setSelectedCampaign(CAMPAIGNS.find(c => c.id === e.target.value) ?? null)}
+              className="w-full border border-blue-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 text-gray-700"
+            >
+              <option value="">-- Không chọn chiến dịch --</option>
+              {CAMPAIGNS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          {selectedCampaign && (
+            <div className={`flex-1 min-w-[180px] rounded-xl border p-2.5 ${selectedCampaign.color}`}>
+              <p className={`text-xs font-semibold ${selectedCampaign.accent}`}>{selectedCampaign.description}</p>
+              <p className="text-xs text-gray-400 mt-0.5">🎯 {selectedCampaign.target}</p>
+            </div>
+          )}
+          <button
+            onClick={() => setShowObjHandler(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all self-end whitespace-nowrap ${showObjHandler ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-gray-200 text-gray-600 hover:border-indigo-300'}`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Xử lý từ chối
+          </button>
+        </div>
+      </div>
+
+      {/* ── Dynamic Scripting — Objection Handler ── */}
+      {showObjHandler && (
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+          <p className="text-sm font-bold text-indigo-700 mb-3">Kịch bản xử lý từ chối — Click để copy ngay</p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {OBJECTIONS.map((obj, i) => (
+              <button key={i} onClick={() => copyRebuttal(obj.response, i)}
+                className={`text-left rounded-xl border p-3 transition-all hover:shadow-sm ${obj.color} ${copiedIdx === i ? 'ring-2 ring-indigo-400' : ''}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-xs font-bold ${obj.accent}`}>{obj.trigger}</span>
+                  <span className={`text-xs font-medium ${copiedIdx === i ? 'text-indigo-600' : 'text-gray-400'}`}>{copiedIdx === i ? '✓ Đã copy' : 'Copy'}</span>
+                </div>
+                <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{obj.response}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Dual Mode: AI vs Human ── */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <p className="text-xs font-semibold text-gray-500 shrink-0">Chế độ gọi:</p>
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+          {([['ai', '🤖 AI Auto-Dialer'], ['human', '👤 Sale gọi thủ công']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setCallMode(k)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${callMode === k ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {callMode === 'ai' && <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">AI sàng lọc → chuyển máy khi có tín hiệu quan tâm</span>}
+        {callMode === 'human' && <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">Sale gọi thẳng — dùng kịch bản từ chối bên trên</span>}
+      </div>
+
+      {/* ── Single / Batch toggle ── */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-        {[{ k: 'single' as const, l: '📞 Gọi đơn lẻ' }, { k: 'batch' as const, l: '📋 Gọi hàng loạt' }].map(m => (
-          <button key={m.k} onClick={() => setMode(m.k)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === m.k ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            {m.l}
+        {([['single', '📞 Gọi đơn lẻ'], ['batch', '📋 Gọi hàng loạt']] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setMode(k)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${mode === k ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {l}
           </button>
         ))}
       </div>
@@ -739,33 +856,42 @@ function ColdCallTab({ client }: { client: Client | null }) {
             <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Số điện thoại *"
               onKeyDown={e => e.key === 'Enter' && callSingle()}
               className="flex-1 min-w-[160px] border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300" />
-            <button onClick={callSingle} disabled={callingSingle || !phone.trim()}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors whitespace-nowrap">
-              <Phone className="w-4 h-4" />{callingSingle ? 'Đang gọi...' : 'Gọi ngay'}
-            </button>
+            {callMode === 'ai' ? (
+              <button onClick={callSingle} disabled={callingSingle || !phone.trim()}
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors whitespace-nowrap">
+                <Phone className="w-4 h-4" />{callingSingle ? 'AI đang gọi...' : 'AI Gọi ngay'}
+              </button>
+            ) : (
+              <a href={phone ? `tel:${phone.replace(/\D/g,'')}` : '#'}
+                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors whitespace-nowrap" style={{textDecoration:'none'}}>
+                <Phone className="w-4 h-4" />Gọi thủ công
+              </a>
+            )}
           </div>
         </div>
       )}
 
       {mode === 'batch' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm text-gray-500">File Excel cần có cột <strong>Tên</strong> và <strong>Số điện thoại</strong></p>
             <button onClick={() => fileRef.current?.click()}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700">
-              <Upload className="w-4 h-4" /> Chọn file
+              <Upload className="w-4 h-4" /> Import Excel nhanh
             </button>
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
           </div>
           {uploading && <p className="text-sm text-gray-400">Đang đọc file...</p>}
           {outboundList.length > 0 && (
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <p className="text-sm text-gray-600"><strong className="text-blue-700">{outboundList.length}</strong> số điện thoại</p>
-                <button onClick={callAll} disabled={calling}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-sm font-semibold">
-                  <PhoneOutgoing className="w-4 h-4" />{calling ? 'Đang gọi...' : `Gọi tất cả ${outboundList.length} số`}
-                </button>
+                {callMode === 'ai' && (
+                  <button onClick={callAll} disabled={calling}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-sm font-semibold">
+                    <PhoneOutgoing className="w-4 h-4" />{calling ? 'AI đang gọi...' : `AI gọi tất cả ${outboundList.length} số`}
+                  </button>
+                )}
               </div>
               <div className="rounded-xl border border-gray-100 overflow-hidden">
                 <table className="w-full text-sm">
@@ -773,7 +899,7 @@ function ColdCallTab({ client }: { client: Client | null }) {
                     <tr><th className="px-3 py-2 text-left">#</th><th className="px-3 py-2 text-left">Tên</th><th className="px-3 py-2 text-left">Số điện thoại</th><th className="px-3 py-2 text-center">Trạng thái</th></tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {outboundList.slice(0,15).map((r, i) => {
+                    {outboundList.slice(0,20).map((r, i) => {
                       const result = callResults[i]
                       return (
                         <tr key={i} className="hover:bg-gray-50">
@@ -781,18 +907,43 @@ function ColdCallTab({ client }: { client: Client | null }) {
                           <td className="px-3 py-2 text-gray-700">{r.name||'--'}</td>
                           <td className="px-3 py-2 text-gray-700 font-mono text-xs">{r.phone}</td>
                           <td className="px-3 py-2 text-center">
-                            {result ? (result.success ? <span className="text-emerald-600 text-xs font-medium">✓ Đã gọi</span> : <span className="text-red-500 text-xs">✗ Lỗi</span>)
-                              : <button onClick={() => callOne(r,i)} disabled={callingIndex===i} className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 disabled:opacity-50">{callingIndex===i?'...':'Gọi'}</button>}
+                            {callMode === 'human'
+                              ? <a href={`tel:${r.phone}`} className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs hover:bg-emerald-700 inline-block" style={{textDecoration:'none'}}>Gọi tay</a>
+                              : result
+                                ? (result.success ? <span className="text-emerald-600 text-xs font-medium">✓ AI đang gọi</span> : <span className="text-red-500 text-xs">✗ Lỗi</span>)
+                                : <button onClick={() => callOne(r,i)} disabled={callingIndex===i} className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 disabled:opacity-50">{callingIndex===i?'Đang gọi...':'Gọi'}</button>
+                            }
                           </td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
-                {outboundList.length > 15 && <p className="text-xs text-gray-400 px-3 py-2 bg-gray-50">...và {outboundList.length - 15} số nữa</p>}
+                {outboundList.length > 20 && <p className="text-xs text-gray-400 px-3 py-2 bg-gray-50">...và {outboundList.length - 20} số nữa</p>}
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Smart Retry Stats (Lead Scoring overview) ── */}
+      {coldCalls.length > 0 && (
+        <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+          <div className="bg-orange-50 rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-orange-700">{noAnswerCalls.length}</p>
+            <p className="text-xs text-orange-600 font-medium">Chưa nghe máy</p>
+            <p className="text-xs text-gray-400 mt-0.5">Retry thông minh: {nextRetryTime()}</p>
+          </div>
+          <div className="bg-green-50 rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-green-700">{hotLeads.length}</p>
+            <p className="text-xs text-green-600 font-medium">🔥 Lead nóng ≥70đ</p>
+            <p className="text-xs text-gray-400 mt-0.5">Cần follow-up gấp</p>
+          </div>
+          <div className="bg-blue-50 rounded-xl p-3 text-center">
+            <p className="text-xl font-bold text-blue-700">{coldCalls.length > 0 ? Math.round(hotLeads.length / coldCalls.length * 100) : 0}%</p>
+            <p className="text-xs text-blue-600 font-medium">Tỉ lệ chuyển đổi</p>
+            <p className="text-xs text-gray-400 mt-0.5">Từ data lạnh</p>
+          </div>
         </div>
       )}
     </div>
@@ -1361,7 +1512,7 @@ export default function DashboardPage() {
             </div>
 
             {activeTab === 'receptionist' && <ReceptionistTab calls={calls} client={client} contacts={contacts} onQuickCall={handleQuickCall} />}
-            {activeTab === 'cold'         && <ColdCallTab client={client} />}
+            {activeTab === 'cold'         && <ColdCallTab client={client} calls={calls} />}
             {activeTab === 'cskh'         && <CSKHTab client={client} contacts={contacts} />}
             {activeTab === 'warm'         && <WarmLeadsTab client={client} contacts={contacts} />}
           </div>
@@ -1401,6 +1552,12 @@ export default function DashboardPage() {
 
         {/* Lịch sử cuộc gọi */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {calls.filter(c => calcScore(c) >= 70 && c.status !== 'no_answer').length > 0 && (
+            <div className="mx-4 mt-4 mb-0 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5 flex items-center gap-3">
+              <span className="text-green-700 font-bold text-sm">🔥 {calls.filter(c => calcScore(c) >= 70 && c.status !== 'no_answer').length} lead nóng</span>
+              <span className="text-green-600 text-xs">Score ≥ 70đ — cần follow-up ngay!</span>
+            </div>
+          )}
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-semibold text-gray-700 text-sm">Lịch sử cuộc gọi ({totalCalls})</h3>
             <div className="flex items-center gap-3">
@@ -1422,6 +1579,7 @@ export default function DashboardPage() {
                     <th className="px-4 py-2 text-left">Loại</th>
                     <th className="px-4 py-2 text-right">Thời lượng</th>
                     <th className="px-4 py-2 text-center">Kết quả</th>
+                    <th className="px-4 py-2 text-center">Score AI</th>
                     <th className="px-4 py-2 text-left">Tóm tắt</th>
                   </tr>
                 </thead>
@@ -1437,6 +1595,16 @@ export default function DashboardPage() {
                         </td>
                         <td className="px-4 py-2.5 text-right text-gray-600 text-xs">{formatDuration(c.duration_seconds)}</td>
                         <td className="px-4 py-2.5 text-center">{c.status === 'no_answer' ? <RetryBadge call={c} /> : <ScoreBadge score={calcScore(c)} />}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          {c.status === 'no_answer' ? (
+                            <span className="text-gray-300 text-xs">--</span>
+                          ) : (() => {
+                            const s = calcScore(c)
+                            const ten = Math.ceil(s / 10)
+                            const cls = s >= 70 ? 'text-green-700 bg-green-100' : s >= 40 ? 'text-amber-700 bg-amber-100' : 'text-gray-500 bg-gray-100'
+                            return <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${cls}`}>{ten}/10</span>
+                          })()}
+                        </td>
                         <td className="px-4 py-2.5 text-gray-500 text-xs max-w-xs truncate">{c.summary ?? '--'}</td>
                       </tr>
                     )
