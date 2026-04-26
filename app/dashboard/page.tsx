@@ -391,49 +391,271 @@ function AgentModal({
 
 // ─── Tab: Lễ tân ─────────────────────────────────────────────────────────────
 
-function ReceptionistTab({ calls, client }: { calls: Call[]; client: Client | null }) {
+function prioMeta(score: number) {
+  if (score >= 70) return { label: 'VIP', color: 'text-red-700', bg: 'bg-red-50 border-red-100', dot: 'bg-red-500' }
+  if (score >= 40) return { label: 'Quan tâm cao', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-100', dot: 'bg-amber-400' }
+  return { label: 'Thông thường', color: 'text-gray-500', bg: 'bg-gray-50 border-gray-100', dot: 'bg-gray-400' }
+}
+
+function extractSentiment(summary: string | null): string | null {
+  if (!summary) return null
+  const s = summary.toLowerCase()
+  if (s.includes('không hài lòng') || s.includes('khiếu nại') || s.includes('phàn nàn')) return '⚠ Cần xử lý khéo léo'
+  if (s.includes('đặt lịch') || s.includes('sẵn sàng') || s.includes('đồng ý')) return '✓ Sẵn sàng đặt lịch'
+  if (s.includes('hỏi giá') || s.includes('bao nhiêu') || s.includes('chi phí') || s.includes('giá')) return '💰 Quan tâm đến giá'
+  if (s.includes('implant') || s.includes('niềng') || s.includes('tẩy trắng') || s.includes('nhổ')) return '🦷 Có nhu cầu điều trị rõ'
+  if (s.includes('bận') || s.includes('gọi lại') || s.includes('sau')) return '⏰ Hẹn gọi lại'
+  return null
+}
+
+function ReceptionistTab({ calls, client, contacts, onQuickCall }: {
+  calls: Call[]; client: Client | null; contacts: Contact[]
+  onQuickCall: (phone: string, name: string) => Promise<void>
+}) {
+  const { toast } = useToast()
+  const [selectedId, setSelectedId]   = useState<string | null>(null)
+  const [sendingSms, setSendingSms]   = useState<string | null>(null)
+
   const inbound = calls.filter(c => c.direction === 'inbound')
   const todayIn = inbound.filter(c => new Date(c.created_at).toDateString() === new Date().toDateString())
+  const missed  = inbound.filter(c => c.status === 'no_answer')
+  const recent  = inbound.filter(c => c.status !== 'no_answer').slice(0, 5)
+
+  // phone normalizer → contact lookup
+  const phoneMap = new Map<string, Contact>()
+  contacts.forEach(c => {
+    phoneMap.set(c.phone, c)
+    phoneMap.set(c.phone.replace(/^0/, ''), c)
+    phoneMap.set('+84' + c.phone.replace(/^0/, ''), c)
+  })
+  function findContact(p: string | null): Contact | null {
+    if (!p) return null
+    return phoneMap.get(p) ?? phoneMap.get(p.replace(/^\+84/, '0')) ?? phoneMap.get(p.replace(/^0/, '')) ?? null
+  }
+
+  function priorityScore(call: Call, contact: Contact | null) {
+    let s = 0
+    if (contact?.interest_level === 'high') s += 50
+    if ((contact?.call_count ?? 0) >= 3) s += 15
+    const sum = (call.summary ?? '').toLowerCase()
+    if (sum.includes('implant') || sum.includes('niềng')) s += 20
+    if (sum.includes('sẵn sàng') || sum.includes('đặt lịch')) s += 15
+    if ((call.retry_count ?? 0) === 0) s += 10
+    return Math.min(s, 100)
+  }
+
+  const enriched = missed.map(call => {
+    const contact = findContact(call.contact_phone)
+    return { call, contact, score: priorityScore(call, contact) }
+  }).sort((a, b) => b.score - a.score)
+
+  const sel = selectedId
+    ? enriched.find(e => e.call.id === selectedId) ?? enriched[0]
+    : enriched[0]
+
+  async function sendSms(phone: string, name: string) {
+    setSendingSms(phone)
+    try {
+      const msg = `Chào ${name || 'bạn'}! Nha khoa Mila vừa gọi nhỡ cho bạn. Gọi lại 028-8387-6780 hoặc để lại tin nhắn — chúng tôi hỗ trợ ngay. Trân trọng!`
+      const r = await fetch('https://letanai.tino.page/webhook/saas-send-sms', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.startsWith('+84') ? phone : `+84${phone.replace(/^0/, '')}`, message: msg, tenant_id: client?.id }),
+      })
+      toast(r.ok ? 'Đã gửi SMS cho khách' : 'Gửi SMS thất bại', r.ok ? 'success' : 'error')
+    } catch { toast('Lỗi kết nối', 'error') }
+    setSendingSms(null)
+  }
+
   return (
     <div className="space-y-4">
+      {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Số điện thoại', value: client?.retell_phone_number ?? '--', color: 'text-emerald-800', bg: 'bg-emerald-50' },
-          { label: 'Hôm nay nhận', value: `${todayIn.length} cuộc`, color: 'text-emerald-800', bg: 'bg-emerald-50' },
-          { label: 'Đặt lịch hôm nay', value: `${todayIn.filter(c => c.appointment_booked).length} lịch`, color: 'text-emerald-800', bg: 'bg-emerald-50' },
-          { label: 'Tổng gọi đến', value: `${inbound.length} cuộc`, color: 'text-emerald-800', bg: 'bg-emerald-50' },
+          { label: 'Số điện thoại',     value: client?.retell_phone_number ?? '--', color: 'text-emerald-800', bg: 'bg-emerald-50' },
+          { label: 'Hôm nay nhận',      value: `${todayIn.length} cuộc`,           color: 'text-emerald-800', bg: 'bg-emerald-50' },
+          { label: 'Gọi nhỡ cần xử lý',value: `${missed.length} cuộc`,            color: missed.length > 0 ? 'text-red-700 font-bold' : 'text-emerald-800', bg: missed.length > 0 ? 'bg-red-50' : 'bg-emerald-50' },
+          { label: 'Đặt lịch hôm nay',  value: `${todayIn.filter(c => c.appointment_booked).length} lịch`, color: 'text-emerald-800', bg: 'bg-emerald-50' },
         ].map(k => (
           <div key={k.label} className={`${k.bg} rounded-xl p-3`}>
             <p className="text-xs text-emerald-600 mb-0.5">{k.label}</p>
-            <p className={`text-sm font-semibold ${k.color}`}>{k.value}</p>
+            <p className={`text-sm ${k.color}`}>{k.value}</p>
           </div>
         ))}
       </div>
-      <div className="rounded-xl border border-gray-100 overflow-hidden">
-        <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-          <p className="text-xs font-semibold text-gray-500">Cuộc gọi đến gần đây</p>
+
+      {inbound.length === 0 ? (
+        <div className="rounded-xl border border-gray-100 p-10 text-center">
+          <PhoneIncoming className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+          <p className="text-sm text-gray-400">Chưa có cuộc gọi đến nào.</p>
         </div>
-        {inbound.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8">Chưa có cuộc gọi đến nào.</p>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {inbound.slice(0, 8).map(c => (
-              <div key={c.id} className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                  <PhoneIncoming className="w-3.5 h-3.5 text-emerald-600" />
+      ) : (
+        <div className="grid gap-4" style={{ gridTemplateColumns: sel ? '1fr 280px' : '1fr' }}>
+
+          {/* ── Left: priority missed + recent ── */}
+          <div className="space-y-2 min-w-0">
+
+            {missed.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <p className="text-xs font-bold text-red-600 uppercase tracking-wide">
+                    {missed.length} cuộc gọi nhỡ — cần gọi lại
+                  </p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-700 truncate">{c.contact_name || c.contact_phone || '--'}</p>
-                  <p className="text-xs text-gray-400">{formatDateTime(c.created_at)} · {formatDuration(c.duration_seconds)}</p>
-                </div>
-                {c.status === 'no_answer' ? <RetryBadge call={c} /> :
-                 c.appointment_booked ? <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">✓ Đặt lịch</span> :
-                 <ScoreBadge score={calcScore(c)} />}
-              </div>
-            ))}
+
+                {enriched.slice(0, 6).map(({ call, contact, score }) => {
+                  const prio   = prioMeta(score)
+                  const name   = contact?.full_name || call.contact_name || call.contact_phone || '--'
+                  const phone  = call.contact_phone ?? ''
+                  const isSelected = sel?.call.id === call.id
+                  const sentiment  = extractSentiment(call.summary)
+
+                  return (
+                    <div key={call.id}
+                      onClick={() => setSelectedId(call.id)}
+                      className={`rounded-xl border p-3 cursor-pointer transition-all ${isSelected ? 'border-emerald-300 bg-emerald-50 shadow-sm ring-1 ring-emerald-200' : 'border-gray-100 bg-white hover:border-gray-200 hover:shadow-sm'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-700 text-sm shrink-0">
+                          {name[0]?.toUpperCase() ?? '?'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <span className="text-sm font-semibold text-gray-800 truncate">{name}</span>
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${prio.bg} ${prio.color} shrink-0`}>
+                              <span className={`inline-block w-1.5 h-1.5 rounded-full ${prio.dot} mr-1`} />
+                              {prio.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-gray-400">{formatDateTime(call.created_at)}</span>
+                            {contact && <span className="text-xs text-gray-400">· {contact.call_count ?? 0} cuộc trước</span>}
+                            {sentiment && <span className="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md">{sentiment}</span>}
+                          </div>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          <button onClick={e => { e.stopPropagation(); onQuickCall(phone, name) }}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors">
+                            <Phone className="w-3 h-3" /> Gọi lại
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); sendSms(phone, contact?.full_name || name) }}
+                            disabled={sendingSms === phone}
+                            className="px-2.5 py-1.5 bg-white border border-gray-200 hover:border-gray-300 text-gray-600 rounded-lg text-xs font-medium disabled:opacity-50 transition-colors">
+                            {sendingSms === phone ? '...' : 'SMS'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </>
+            )}
+
+            {/* Recent connected */}
+            {recent.length > 0 && (
+              <>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide pt-2">Đã kết nối gần đây</p>
+                {recent.map(call => {
+                  const contact = findContact(call.contact_phone)
+                  const name = contact?.full_name || call.contact_name || call.contact_phone || '--'
+                  return (
+                    <div key={call.id} className="rounded-xl border border-gray-100 bg-white p-3 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-semibold text-gray-500 text-sm shrink-0">
+                        {name[0]?.toUpperCase() ?? '?'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-700 truncate">{name}</p>
+                        <p className="text-xs text-gray-400">{formatDateTime(call.created_at)} · {formatDuration(call.duration_seconds)}</p>
+                      </div>
+                      {call.appointment_booked
+                        ? <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium shrink-0">✓ Đặt lịch</span>
+                        : <ScoreBadge score={calcScore(call)} />}
+                    </div>
+                  )
+                })}
+              </>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* ── Right: contact profile panel ── */}
+          {sel && (
+            <div className="space-y-3">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Hồ sơ khách</p>
+              <div className="bg-white rounded-xl border border-gray-100 p-4 space-y-4">
+
+                {/* Identity */}
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-lg shrink-0">
+                    {(sel.contact?.full_name || sel.call.contact_phone || '?')[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-800 truncate">{sel.contact?.full_name || 'Khách chưa có hồ sơ'}</p>
+                    <p className="text-xs text-gray-400">{sel.call.contact_phone}</p>
+                  </div>
+                </div>
+
+                {/* Quick stats */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                    <p className="text-lg font-bold text-gray-700">{sel.contact?.call_count ?? 0}</p>
+                    <p className="text-xs text-gray-400">Lần đã gọi</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                    <p className="text-sm font-bold text-gray-700">
+                      {sel.contact?.interest_level === 'high' ? '🔥 Cao' : sel.contact?.interest_level === 'low' ? '❄ Thấp' : '— Chưa rõ'}
+                    </p>
+                    <p className="text-xs text-gray-400">Quan tâm</p>
+                  </div>
+                </div>
+
+                {/* AI signal */}
+                {extractSentiment(sel.call.summary) && (
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-indigo-700 mb-0.5">Tín hiệu AI từ cuộc gọi trước</p>
+                    <p className="text-xs text-indigo-600">{extractSentiment(sel.call.summary)}</p>
+                  </div>
+                )}
+
+                {/* Summary */}
+                {sel.call.summary && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-1.5">Tóm tắt cuộc gọi</p>
+                    <p className="text-xs text-gray-600 bg-gray-50 rounded-lg p-2.5 leading-relaxed line-clamp-4">{sel.call.summary}</p>
+                  </div>
+                )}
+
+                {/* Notes from contact */}
+                {sel.contact?.notes && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-1.5">Ghi chú trong hồ sơ</p>
+                    <p className="text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-lg p-2.5 leading-relaxed">{sel.contact.notes}</p>
+                  </div>
+                )}
+
+                {/* Last contact time */}
+                {sel.contact?.last_called_at && (
+                  <p className="text-xs text-gray-400">
+                    Liên hệ lần cuối: {formatDateTime(sel.contact.last_called_at)}
+                  </p>
+                )}
+
+                {/* Actions */}
+                <div className="space-y-2 pt-1 border-t border-gray-100">
+                  <button onClick={() => onQuickCall(sel.call.contact_phone ?? '', sel.contact?.full_name || '')}
+                    className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors">
+                    <Phone className="w-4 h-4" /> Gọi lại ngay
+                  </button>
+                  <button onClick={() => sendSms(sel.call.contact_phone ?? '', sel.contact?.full_name || '')}
+                    disabled={sendingSms === sel.call.contact_phone}
+                    className="w-full flex items-center justify-center gap-2 bg-white border border-gray-200 hover:border-emerald-300 text-gray-700 text-sm font-medium py-2.5 rounded-xl transition-colors disabled:opacity-50">
+                    📱 Gửi SMS thông báo
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
     </div>
   )
 }
@@ -894,6 +1116,21 @@ export default function DashboardPage() {
     setPromptMap(p => ({ ...p, [key]: tabDef.defaultPrompt.replace(/\{clinic_name\}/g, name) }))
   }
 
+  async function handleQuickCall(phone: string, name: string) {
+    const agentId = client?.agent_receptionist_id ?? client?.retell_agent_id
+    const fromNumber = client?.retell_phone_number
+    if (!agentId || !fromNumber) { toast('Chưa cấu hình agent lễ tân', 'error'); return }
+    try {
+      const res = await fetch('/api/outbound', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phones: [{ phone: phone.replace(/\D/g, ''), name }], agentId, fromNumber }),
+      })
+      const d = await res.json()
+      if (d.results?.[0]?.success) toast(`Đang gọi lại ${name || phone}`, 'success')
+      else toast(d.results?.[0]?.error || 'Gọi thất bại', 'error')
+    } catch { toast('Lỗi kết nối', 'error') }
+  }
+
   if (loading) return <PageSkeleton />
 
   const totalCalls = calls.length
@@ -955,7 +1192,7 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {activeTab === 'receptionist' && <ReceptionistTab calls={calls} client={client} />}
+            {activeTab === 'receptionist' && <ReceptionistTab calls={calls} client={client} contacts={contacts} onQuickCall={handleQuickCall} />}
             {activeTab === 'cold'         && <ColdCallTab client={client} />}
             {activeTab === 'cskh'         && <CSKHTab client={client} contacts={contacts} />}
             {activeTab === 'warm'         && <WarmLeadsTab client={client} contacts={contacts} />}
