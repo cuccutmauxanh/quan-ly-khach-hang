@@ -1550,69 +1550,23 @@ export default function DashboardPage() {
       )}
       </div>{/* end flex wrapper */}
 
-        {/* Lịch sử cuộc gọi */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          {calls.filter(c => calcScore(c) >= 70 && c.status !== 'no_answer').length > 0 && (
-            <div className="mx-4 mt-4 mb-0 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5 flex items-center gap-3">
-              <span className="text-green-700 font-bold text-sm">🔥 {calls.filter(c => calcScore(c) >= 70 && c.status !== 'no_answer').length} lead nóng</span>
-              <span className="text-green-600 text-xs">Score ≥ 70đ — cần follow-up ngay!</span>
-            </div>
-          )}
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-700 text-sm">Lịch sử cuộc gọi ({totalCalls})</h3>
-            <div className="flex items-center gap-3">
-              {lastRefresh && <span className="text-xs text-gray-400">Cập nhật lúc {lastRefresh.getHours()}:{String(lastRefresh.getMinutes()).padStart(2,'0')}</span>}
-              <button onClick={() => clientIdRef.current && fetchCalls(clientIdRef.current)} className="p-1.5 hover:bg-gray-100 rounded-lg">
-                <RefreshCw className="w-4 h-4 text-gray-400" />
-              </button>
-            </div>
+        {/* Lịch sử cuộc gọi — link sang trang riêng */}
+        <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-gray-700">Lịch sử cuộc gọi</span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">{totalCalls} cuộc gọi</span>
+            {calls.filter(c => calcScore(c) >= 70 && c.status !== 'no_answer').length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                🔥 {calls.filter(c => calcScore(c) >= 70 && c.status !== 'no_answer').length} lead nóng
+              </span>
+            )}
           </div>
-          {calls.length === 0 ? (
-            <div className="p-10 text-center text-gray-400 text-sm">Chưa có cuộc gọi nào.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs text-gray-500">
-                  <tr>
-                    <th className="px-4 py-2 text-left">Thời gian</th>
-                    <th className="px-4 py-2 text-left">Khách</th>
-                    <th className="px-4 py-2 text-left">Loại</th>
-                    <th className="px-4 py-2 text-right">Thời lượng</th>
-                    <th className="px-4 py-2 text-center">Kết quả</th>
-                    <th className="px-4 py-2 text-center">Score AI</th>
-                    <th className="px-4 py-2 text-left">Tóm tắt</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {calls.map(c => {
-                    const isIn = c.direction === 'inbound'
-                    return (
-                      <tr key={c.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedCall(c)}>
-                        <td className="px-4 py-2.5 text-gray-500 text-xs whitespace-nowrap">{formatDateTime(c.created_at)}</td>
-                        <td className="px-4 py-2.5 text-gray-700 text-xs">{c.contact_name || c.contact_phone || '--'}</td>
-                        <td className="px-4 py-2.5">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isIn ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{isIn ? 'Gọi đến' : 'Gọi đi'}</span>
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-gray-600 text-xs">{formatDuration(c.duration_seconds)}</td>
-                        <td className="px-4 py-2.5 text-center">{c.status === 'no_answer' ? <RetryBadge call={c} /> : <ScoreBadge score={calcScore(c)} />}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          {c.status === 'no_answer' ? (
-                            <span className="text-gray-300 text-xs">--</span>
-                          ) : (() => {
-                            const s = calcScore(c)
-                            const ten = Math.ceil(s / 10)
-                            const cls = s >= 70 ? 'text-green-700 bg-green-100' : s >= 40 ? 'text-amber-700 bg-amber-100' : 'text-gray-500 bg-gray-100'
-                            return <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${cls}`}>{ten}/10</span>
-                          })()}
-                        </td>
-                        <td className="px-4 py-2.5 text-gray-500 text-xs max-w-xs truncate">{c.summary ?? '--'}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <a
+            href="/call-history"
+            className="text-sm font-medium text-[#00b4d8] hover:underline flex items-center gap-1"
+          >
+            Xem toàn bộ →
+          </a>
         </div>
 
     </AppShell>

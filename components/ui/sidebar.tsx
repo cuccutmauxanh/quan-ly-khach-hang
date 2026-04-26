@@ -7,7 +7,7 @@ import { useTheme, useToggleDark } from './theme'
 import {
   IPhone, IUsers, ICalendar, IBarChart, ISettings, ILogOut,
   IKanban, IBullhorn, ILightbulb, ILayers, IZap, IMail, IMic,
-  IMoon, ISun,
+  IMoon, ISun, IClock,
 } from './icons'
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
@@ -19,6 +19,7 @@ const NAV_ITEMS: {
   group: NavGroup; href: string | null
 }[] = [
   { id: 'dashboard',    label: 'Cuộc gọi',        Icon: IPhone,      group: 'main',      href: '/dashboard' },
+  { id: 'call-history', label: 'Lịch sử cuộc gọi', Icon: IClock,     group: 'main',      href: '/call-history' },
   { id: 'agents',       label: 'Trợ lý AI',        Icon: IMic,        group: 'main',      href: '/agents' },
   { id: 'contacts',     label: 'Data khách',       Icon: IUsers,      group: 'main',      href: '/contacts' },
   { id: 'pipeline',     label: 'Khách tiềm năng',  Icon: IKanban,     group: 'main',      href: '/pipeline' },
