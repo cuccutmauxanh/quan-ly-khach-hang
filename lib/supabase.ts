@@ -82,3 +82,51 @@ export type Appointment = {
   created_at: string
   contacts?: { full_name: string | null; phone: string } | null
 }
+
+export type CskhEvent = {
+  id: string
+  tenant_id: string
+  contact_id: string | null
+  call_id: string | null
+  trigger_type: string
+  channel: string
+  scheduled_at: string
+  sent_at: string | null
+  status: string
+  contact_phone: string | null
+  contact_name: string | null
+  retry_count: number
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+export type CampaignContact = { name: string; phone: string }
+export type CampaignResult = {
+  phone: string
+  name: string
+  success: boolean
+  call_id?: string
+  error?: string | null
+  status: 'pending' | 'calling' | 'done' | 'error'
+}
+
+export type Campaign = {
+  id: string
+  tenant_id: string
+  name: string
+  description: string | null
+  agent_key: string
+  agent_label: string | null
+  status: 'draft' | 'running' | 'paused' | 'completed'
+  delay_ms: number
+  total_count: number
+  called_count: number
+  booked_count: number
+  error_count: number
+  contacts: CampaignContact[]
+  results: CampaignResult[]
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
