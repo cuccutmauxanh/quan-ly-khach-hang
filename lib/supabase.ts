@@ -108,6 +108,7 @@ export type CampaignResult = {
   call_id?: string
   error?: string | null
   status: 'pending' | 'calling' | 'done' | 'error'
+  call_outcome?: 'booked' | 'no_answer' | 'rejected' | null
 }
 
 export type Campaign = {
@@ -123,6 +124,9 @@ export type Campaign = {
   called_count: number
   booked_count: number
   error_count: number
+  no_answer_count: number
+  cancelled_count: number
+  retry_config: { enabled: boolean; delay_hours: number; max_retries: number } | null
   contacts: CampaignContact[]
   results: CampaignResult[]
   started_at: string | null
