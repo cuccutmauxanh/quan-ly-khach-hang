@@ -49,6 +49,7 @@ export const IMic       = (p: IcProps) => <Ic {...p} d="M12 1a3 3 0 0 0-3 3v8a3 
 export const IClock     = (p: IcProps) => <Ic {...p} d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zM12 6v6l4 2" />
 export const ITarget    = (p: IcProps) => <Ic {...p} d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
 export const IFilter    = (p: IcProps) => <Ic {...p} d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+export const IMegaphone = (p: IcProps) => <Ic {...p} d="M3 11v2a9 9 0 0 0 9 9v0M11 5H3v8h8l8 4V1l-8 4z" d2="M7 9H5M7 13H5" />
 export const IDot       = ({ color, size = 8 }: { color: string; size?: number }) => (
   <span style={{ display: 'inline-block', width: size, height: size, borderRadius: '50%', background: color, flexShrink: 0 }} />
 )

@@ -5,32 +5,28 @@ import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { useTheme, useToggleDark } from './theme'
 import {
-  IPhone, IUsers, ICalendar, IBarChart, ISettings, ILogOut,
-  IKanban, IBullhorn, ILightbulb, ILayers, IZap, IMail, IMic,
-  IMoon, ISun, IClock,
+  IUsers, IBarChart, ISettings, ILogOut,
+  IBullhorn, IZap, IMic,
+  IMoon, ISun, IClock, IHeart, IMegaphone,
 } from './icons'
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
-type NavGroup = 'main' | 'growth' | 'secondary'
+type NavGroup = 'campaigns' | 'tracking' | 'customers' | 'analytics' | 'system'
 
 const NAV_ITEMS: {
-  id: string; label: string; Icon: (p: { size?: number }) => React.ReactElement
+  id: string; label: string; sublabel?: string; Icon: (p: { size?: number }) => React.ReactElement
   group: NavGroup; href: string | null
 }[] = [
-  { id: 'dashboard',    label: 'Cuộc gọi',        Icon: IPhone,      group: 'main',      href: '/dashboard' },
-  { id: 'call-history', label: 'Lịch sử cuộc gọi', Icon: IClock,     group: 'main',      href: '/call-history' },
-  { id: 'agents',       label: 'Trợ lý AI',        Icon: IMic,        group: 'main',      href: '/agents' },
-  { id: 'contacts',     label: 'Data khách',       Icon: IUsers,      group: 'main',      href: '/contacts' },
-  { id: 'pipeline',     label: 'Khách tiềm năng',  Icon: IKanban,     group: 'main',      href: '/pipeline' },
-  { id: 'appointments', label: 'Lịch hẹn',         Icon: ICalendar,   group: 'main',      href: '/appointments' },
-  { id: 'email',        label: 'Email',            Icon: IMail,       group: 'main',      href: null },
-  { id: 'campaigns',    label: 'Chiến dịch AI',    Icon: IBullhorn,   group: 'main',      href: '/campaigns' },
-  { id: 'insights',     label: 'Gợi ý AI',         Icon: ILightbulb,  group: 'main',      href: '/insights' },
-  { id: 'abtesting',    label: 'Thử nghiệm A/B',   Icon: ILayers,     group: 'growth',    href: '/abtesting' },
-  { id: 'sms',          label: 'SMS & Zalo',        Icon: IZap,        group: 'growth',    href: '/sms' },
-  { id: 'analytics',    label: 'Báo cáo',           Icon: IBarChart,   group: 'secondary', href: '/analytics' },
-  { id: 'settings',     label: 'Cài đặt',           Icon: ISettings,   group: 'secondary', href: '/settings' },
+  { id: 'campaigns',    label: 'Chiến dịch AI',    sublabel: 'Gọi ra tự động',   Icon: IBullhorn,  group: 'campaigns', href: '/campaigns' },
+  { id: 'inbound',      label: 'Lễ Tân AI',         sublabel: 'Nhận cuộc gọi đến', Icon: IMic,       group: 'campaigns', href: '/inbound' },
+  { id: 'call-history', label: 'Lịch sử',           sublabel: 'Tất cả cuộc gọi',  Icon: IClock,     group: 'tracking',  href: '/call-history' },
+  { id: 'contacts',     label: 'Khách hàng',        sublabel: 'Data & Pipeline',   Icon: IUsers,     group: 'customers', href: '/contacts' },
+  { id: 'cskh',         label: 'Chăm Sóc',          sublabel: 'Follow-up & Journey', Icon: IHeart,      group: 'customers', href: '/cskh' },
+  { id: 'facebook-ads', label: 'Facebook Ads',       sublabel: 'Leads & Chiến dịch', Icon: IMegaphone,  group: 'customers', href: '/facebook-ads' },
+  { id: 'analytics',    label: 'Báo cáo',           sublabel: 'KPI & AI Insights', Icon: IBarChart,  group: 'analytics', href: '/analytics' },
+  { id: 'sms',          label: 'SMS & Zalo',         sublabel: 'Tin nhắn tự động',  Icon: IZap,       group: 'analytics', href: '/sms' },
+  { id: 'settings',     label: 'Cài đặt',                                           Icon: ISettings,  group: 'system',    href: '/settings' },
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -59,14 +55,15 @@ export function Sidebar({ clientName }: { clientName?: string | null }) {
     if (href) router.push(href)
   }
 
-  const mainItems      = NAV_ITEMS.filter(n => n.group === 'main')
-  const growthItems    = NAV_ITEMS.filter(n => n.group === 'growth')
-  const secondaryItems = NAV_ITEMS.filter(n => n.group === 'secondary')
+  const campaignItems  = NAV_ITEMS.filter(n => n.group === 'campaigns')
+  const trackingItems  = NAV_ITEMS.filter(n => n.group === 'tracking')
+  const customerItems  = NAV_ITEMS.filter(n => n.group === 'customers')
+  const analyticsItems = NAV_ITEMS.filter(n => n.group === 'analytics')
+  const systemItems    = NAV_ITEMS.filter(n => n.group === 'system')
 
   function NavBtn({ item }: { item: typeof NAV_ITEMS[0] }) {
     const active = item.href ? pathname.startsWith(item.href) : false
     const isHov  = hovered === item.id
-    const upcoming = item.href === null
     const { Icon } = item
 
     return (
@@ -78,26 +75,24 @@ export function Sidebar({ clientName }: { clientName?: string | null }) {
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
           padding: '8px 12px', borderRadius: 8, border: 'none',
-          cursor: upcoming ? 'default' : 'pointer',
+          cursor: 'pointer',
           fontSize: 13, fontWeight: active ? 600 : 400,
-          background: active ? 'rgba(0,180,216,0.08)' : isHov && !upcoming ? t.navHover : 'transparent',
-          color: upcoming ? t.text3 : active ? '#00b4d8' : t.text2,
+          background: active ? 'rgba(0,180,216,0.08)' : isHov ? t.navHover : 'transparent',
+          color: active ? '#00b4d8' : t.text2,
           textAlign: 'left', transition: 'all 0.12s',
           borderLeft: active ? '2.5px solid #00b4d8' : '2.5px solid transparent',
-          fontFamily: 'inherit', width: '100%', opacity: upcoming ? 0.6 : 1,
+          fontFamily: 'inherit', width: '100%',
         }}
       >
         <Icon size={15} />
-        <span style={{ flex: 1 }}>{item.label}</span>
-        {upcoming && (
-          <span style={{
-            fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
-            color: t.text3, background: t.mutedBg,
-            padding: '1px 5px', borderRadius: 4,
-          }}>
-            SỚM
-          </span>
-        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ lineHeight: '1.3' }}>{item.label}</div>
+          {item.sublabel && (
+            <div style={{ fontSize: 10, color: active ? '#00b4d8' : t.text3, fontWeight: 400, lineHeight: '1.2' }}>
+              {item.sublabel}
+            </div>
+          )}
+        </div>
       </button>
     )
   }
@@ -166,14 +161,20 @@ export function Sidebar({ clientName }: { clientName?: string | null }) {
         display: 'flex', flexDirection: 'column', gap: 2,
         overflowY: 'auto',
       }}>
-        <GroupLabel label="Chính" />
-        {mainItems.map(item => <NavBtn key={item.id} item={item} />)}
+        <GroupLabel label="Chiến dịch" />
+        {campaignItems.map(item => <NavBtn key={item.id} item={item} />)}
 
-        <GroupLabel label="Tăng trưởng" />
-        {growthItems.map(item => <NavBtn key={item.id} item={item} />)}
+        <GroupLabel label="Theo dõi" />
+        {trackingItems.map(item => <NavBtn key={item.id} item={item} />)}
+
+        <GroupLabel label="Khách hàng" />
+        {customerItems.map(item => <NavBtn key={item.id} item={item} />)}
+
+        <GroupLabel label="Phân tích" />
+        {analyticsItems.map(item => <NavBtn key={item.id} item={item} />)}
 
         <GroupLabel label="Hệ thống" />
-        {secondaryItems.map(item => <NavBtn key={item.id} item={item} />)}
+        {systemItems.map(item => <NavBtn key={item.id} item={item} />)}
       </nav>
 
       {/* Bottom: client info + logout */}
