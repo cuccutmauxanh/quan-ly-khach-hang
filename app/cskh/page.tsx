@@ -371,7 +371,7 @@ export default function CskhPage() {
         .order('scheduled_at', { ascending: true }),
     ])
 
-    setAppointments((appts ?? []) as AppointmentRow[])
+    setAppointments((appts ?? []) as unknown as AppointmentRow[])
     setCareEvents((events ?? []) as CareEvent[])
   }, [])
 
@@ -405,7 +405,7 @@ export default function CskhPage() {
   async function handleCallAI(contact: ContactRow) {
     const cli = clientRef.current
     if (!cli?.agent_cskh_id || !cli?.retell_phone_number) {
-      toast({ type: 'error', message: 'Chưa cấu hình agent CSKH cho tài khoản này' })
+      toast('Chưa cấu hình agent CSKH cho tài khoản này', 'error')
       return
     }
     setCallingId(contact.id)
@@ -420,10 +420,10 @@ export default function CskhPage() {
       })
       const json = await res.json()
       const result = json?.results?.[0]
-      if (result?.success) toast({ type: 'success', message: `Đang gọi ${contact.full_name}...` })
-      else toast({ type: 'error', message: result?.error ?? 'Gọi thất bại' })
+      if (result?.success) toast(`Đang gọi ${contact.full_name}...`, 'success')
+      else toast(result?.error ?? 'Gọi thất bại', 'error')
     } catch {
-      toast({ type: 'error', message: 'Không thể kết nối cuộc gọi' })
+      toast('Không thể kết nối cuộc gọi', 'error')
     }
     setTimeout(() => setCallingId(null), 3000)
   }
@@ -432,11 +432,11 @@ export default function CskhPage() {
     setMovingId(contactId)
     const { error } = await supabase.from('contacts').update({ stage: newStage }).eq('id', contactId)
     if (error) {
-      toast({ type: 'error', message: 'Không thể chuyển stage' })
+      toast('Không thể chuyển stage', 'error')
     } else {
       setContacts(prev => prev.map(c => c.id === contactId ? { ...c, stage: newStage } : c))
       const stageName = STAGES.find(s => s.key === newStage)?.label ?? newStage
-      toast({ type: 'success', message: `Đã chuyển sang "${stageName}"` })
+      toast(`Đã chuyển sang "${stageName}"`, 'success')
     }
     setMovingId(null)
   }
@@ -452,10 +452,10 @@ export default function CskhPage() {
     const { error } = await supabase
       .from('contacts').update({ notes: noteText }).eq('id', noteContact.id)
     if (error) {
-      toast({ type: 'error', message: 'Lưu thất bại' })
+      toast('Lưu thất bại', 'error')
     } else {
       setContacts(prev => prev.map(c => c.id === noteContact.id ? { ...c, notes: noteText } : c))
-      toast({ type: 'success', message: 'Đã lưu ghi chú' })
+      toast('Đã lưu ghi chú', 'success')
       setNoteContact(null)
     }
     setSavingNote(false)
@@ -477,9 +477,9 @@ export default function CskhPage() {
     }))
     const { error } = await supabase.from('cskh_care_events').insert(rows)
     if (error) {
-      toast({ type: 'error', message: 'Tạo journey thất bại' })
+      toast('Tạo journey thất bại', 'error')
     } else {
-      toast({ type: 'success', message: 'Đã tạo hành trình tự động' })
+      toast('Đã tạo hành trình tự động', 'success')
       await loadJourney(clientId)
     }
     setCreatingId(null)
