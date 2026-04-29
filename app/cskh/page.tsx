@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   Phone, FileText, ChevronDown,
   Plus, Heart, Calendar, RefreshCw, Flame, X, AlertCircle,
-  ChevronRight, Bell, Users,
+  ChevronRight, Bell, Users, Search, TrendingUp,
 } from 'lucide-react'
 import AppShell from '@/components/ui/app-shell'
 import { PageSkeleton } from '@/components/skeleton'
@@ -340,6 +340,8 @@ export default function CskhPage() {
   const [noteText, setNoteText]       = useState('')
   const [savingNote, setSavingNote]   = useState(false)
 
+  const [pipelineSearch, setPipelineSearch] = useState('')
+
   // ── Data loaders ─────────────────────────────────────────────────────────────
 
   const loadContacts = useCallback(async (tid: string) => {
@@ -493,9 +495,21 @@ export default function CskhPage() {
 
   // ── Derived ───────────────────────────────────────────────────────────────────
 
+  const searchedContacts = pipelineSearch
+    ? contacts.filter(c => {
+        const q = pipelineSearch.toLowerCase()
+        return (c.full_name ?? '').toLowerCase().includes(q) || c.phone.includes(q)
+      })
+    : contacts
+
   const byStage = Object.fromEntries(
-    STAGES.map(s => [s.key, contacts.filter(c => c.stage === s.key)])
+    STAGES.map(s => [s.key, searchedContacts.filter(c => c.stage === s.key)])
   )
+
+  const now = Date.now()
+  const overdueCount   = contacts.filter(c => c.followup_at && new Date(c.followup_at).getTime() < now && c.stage !== 'closed').length
+  const todayFollowup  = contacts.filter(c => c.followup_at && new Date(c.followup_at).toDateString() === new Date().toDateString()).length
+  const highInterest   = contacts.filter(c => c.interest_level === 'high').length
 
   const appointmentsWithEvents: AppointmentWithEvents[] = appointments.map(appt => ({
     ...appt,
@@ -564,11 +578,46 @@ export default function CskhPage() {
       {/* ─────────── Section 1: Kanban Pipeline ─────────── */}
       {activeTab === 'pipeline' && (
         <div>
-          <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-base font-semibold text-gray-800">Pipeline Follow-up</h2>
-            <span className="px-2 py-0.5 bg-orange-50 text-orange-600 text-xs rounded-full font-medium">
-              {contacts.length} khách
-            </span>
+          {/* KPI strip */}
+          <div className="grid grid-cols-4 gap-3 mb-4">
+            {[
+              { label: 'Tổng khách hàng',   value: contacts.length,  icon: <Users className="w-4 h-4 text-indigo-500" />,    bg: 'bg-indigo-50' },
+              { label: 'Quá hạn follow-up', value: overdueCount,     icon: <AlertCircle className="w-4 h-4 text-red-500" />, bg: 'bg-red-50',    urgent: overdueCount > 0 },
+              { label: 'Follow-up hôm nay', value: todayFollowup,    icon: <Bell className="w-4 h-4 text-amber-500" />,     bg: 'bg-amber-50' },
+              { label: 'Quan tâm cao',       value: highInterest,     icon: <TrendingUp className="w-4 h-4 text-green-500" />,bg: 'bg-green-50' },
+            ].map(k => (
+              <div key={k.label} className={`bg-white rounded-2xl border ${k.urgent ? 'border-red-200' : 'border-gray-100'} p-3.5 shadow-sm`}>
+                <div className={`w-7 h-7 ${k.bg} rounded-lg flex items-center justify-center mb-2`}>{k.icon}</div>
+                <p className={`text-xl font-bold ${k.urgent ? 'text-red-600' : 'text-gray-800'}`}>{k.value}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{k.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Overdue alert */}
+          {overdueCount > 0 && (
+            <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <p className="text-sm font-medium text-red-700">
+                {overdueCount} khách hàng đã quá hạn follow-up — cần liên hệ ngay hôm nay
+              </p>
+            </div>
+          )}
+
+          {/* Search */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                value={pipelineSearch}
+                onChange={e => setPipelineSearch(e.target.value)}
+                placeholder="Tìm tên, SĐT..."
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+              />
+            </div>
+            {pipelineSearch && (
+              <span className="text-xs text-gray-400">{searchedContacts.length} kết quả</span>
+            )}
           </div>
 
           <div className="grid grid-cols-4 gap-4">
