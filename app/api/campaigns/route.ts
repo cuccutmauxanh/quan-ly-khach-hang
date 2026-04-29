@@ -5,14 +5,11 @@ const SUPABASE_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 async function serverSupabase(request: NextRequest) {
-  const token = request.headers.get('Authorization')?.replace('Bearer ', '') ?? ''
-  const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  const token = request.headers.get('Authorization') ?? ''
+  return createClient(SUPABASE_URL, SUPABASE_ANON, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: token ? { Authorization: token } : {} },
   })
-  if (token) {
-    await sb.auth.setSession({ access_token: token, refresh_token: '' })
-  }
-  return sb
 }
 
 // GET /api/campaigns?tenant_id=...

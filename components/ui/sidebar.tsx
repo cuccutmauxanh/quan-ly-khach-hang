@@ -6,18 +6,19 @@ import { supabase } from '@/lib/supabase'
 import { useTheme, useToggleDark } from './theme'
 import {
   IUsers, IBarChart, ISettings, ILogOut,
-  IBullhorn, IZap, IMic,
+  IBullhorn, IZap, IMic, IHome,
   IMoon, ISun, IClock, IHeart, IMegaphone,
 } from './icons'
 
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
-type NavGroup = 'campaigns' | 'tracking' | 'customers' | 'analytics' | 'system'
+type NavGroup = 'home' | 'campaigns' | 'tracking' | 'customers' | 'analytics' | 'system'
 
 const NAV_ITEMS: {
   id: string; label: string; sublabel?: string; Icon: (p: { size?: number }) => React.ReactElement
   group: NavGroup; href: string | null
 }[] = [
+  { id: 'dashboard',    label: 'Tổng quan',          sublabel: 'Bảng điều khiển',  Icon: IHome,      group: 'home',      href: '/dashboard' },
   { id: 'campaigns',    label: 'Chiến dịch AI',    sublabel: 'Gọi ra tự động',   Icon: IBullhorn,  group: 'campaigns', href: '/campaigns' },
   { id: 'inbound',      label: 'Lễ Tân AI',         sublabel: 'Nhận cuộc gọi đến', Icon: IMic,       group: 'campaigns', href: '/inbound' },
   { id: 'call-history', label: 'Lịch sử',           sublabel: 'Tất cả cuộc gọi',  Icon: IClock,     group: 'tracking',  href: '/call-history' },
@@ -55,6 +56,7 @@ export function Sidebar({ clientName }: { clientName?: string | null }) {
     if (href) router.push(href)
   }
 
+  const homeItems      = NAV_ITEMS.filter(n => n.group === 'home')
   const campaignItems  = NAV_ITEMS.filter(n => n.group === 'campaigns')
   const trackingItems  = NAV_ITEMS.filter(n => n.group === 'tracking')
   const customerItems  = NAV_ITEMS.filter(n => n.group === 'customers')
@@ -161,6 +163,8 @@ export function Sidebar({ clientName }: { clientName?: string | null }) {
         display: 'flex', flexDirection: 'column', gap: 2,
         overflowY: 'auto',
       }}>
+        {homeItems.map(item => <NavBtn key={item.id} item={item} />)}
+
         <GroupLabel label="Chiến dịch" />
         {campaignItems.map(item => <NavBtn key={item.id} item={item} />)}
 

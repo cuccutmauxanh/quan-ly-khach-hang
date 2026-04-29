@@ -12,7 +12,7 @@ import {
   PhoneOutgoing, Heart, Upload, X, CheckCircle2,
   Clock, AlertCircle, Copy, RotateCcw, Users, ChevronRight, Search,
   Megaphone, Pencil, Save, ArrowRight, Phone, Filter, Zap,
-  Download, PhoneMissed, Ban,
+  Download, PhoneMissed, Ban, ChevronLeft, TrendingUp, Sun, Timer, Sparkles,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -92,6 +92,109 @@ function KpiCard({ label, value, icon: Icon, topColor, iconColor, trend }: {
         {trend && (
           <p className="text-xs text-gray-400 mt-2">{trend}</p>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── Stats Hero Banner ─────────────────────────────────────────────────────────
+
+function StatsHero({ campaigns }: { campaigns: Campaign[] }) {
+  const totalCalled  = campaigns.reduce((s, c) => s + c.called_count, 0)
+  const totalBooked  = campaigns.reduce((s, c) => s + c.booked_count, 0)
+  const runningCount = campaigns.filter(c => c.status === 'running').length
+  const rate = totalCalled > 0 ? Math.round((totalBooked / totalCalled) * 100) : 0
+
+  return (
+    <div className="bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-700 rounded-2xl p-5 mb-6 text-white shadow-lg shadow-indigo-200">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-indigo-200 text-xs font-semibold uppercase tracking-wider mb-1">Tổng quan chiến dịch</p>
+          <h2 className="text-lg font-bold leading-tight">
+            {runningCount > 0
+              ? <span className="flex items-center gap-2"><span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse inline-block" />{runningCount} chiến dịch đang gọi</span>
+              : 'Chưa có chiến dịch nào đang chạy'}
+          </h2>
+        </div>
+        {runningCount > 0 && (
+          <div className="bg-white/15 rounded-xl px-3 py-1.5 flex items-center gap-1.5 text-xs font-bold">
+            <RefreshCw className="w-3 h-3 animate-spin" /> LIVE
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {([
+          { label: 'Chiến dịch', value: campaigns.length, icon: Megaphone },
+          { label: 'Đã gọi', value: totalCalled, icon: PhoneOutgoing },
+          { label: 'Đặt lịch', value: totalBooked, icon: CheckCircle2 },
+          { label: 'Tỉ lệ', value: `${rate}%`, icon: TrendingUp },
+        ] as const).map(({ label, value, icon: Icon }) => (
+          <div key={label} className="bg-white/10 hover:bg-white/15 transition-colors rounded-xl p-3">
+            <Icon className="w-3.5 h-3.5 text-indigo-200 mb-2" />
+            <p className="text-xl font-bold leading-none">{value}</p>
+            <p className="text-indigo-200 text-[11px] mt-1">{label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Live Feed Panel ────────────────────────────────────────────────────────────
+
+function LiveFeedPanel({ campaigns, runningId }: { campaigns: Campaign[]; runningId: string | null }) {
+  const running = runningId ? campaigns.find(c => c.id === runningId) ?? null : null
+  if (!running) return null
+
+  const results = (running.results as CampaignResult[])
+    .filter(r => r.status === 'done' || r.status === 'error')
+    .slice(-10)
+    .reverse()
+
+  if (results.length === 0) return (
+    <div className="mb-5 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+      <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shrink-0" />
+      <p className="text-sm font-medium text-emerald-700 flex-1 truncate">
+        Đang khởi động <strong>{running.name}</strong>...
+      </p>
+      <RefreshCw className="w-3.5 h-3.5 text-emerald-500 animate-spin shrink-0" />
+    </div>
+  )
+
+  const EMOJI: Record<string, string> = { booked: '✅', no_answer: '📵', rejected: '❌', error: '⚠️', calling: '🔄', pending: '⏳' }
+  const BADGE: Record<string, string> = {
+    booked:    'bg-emerald-50 text-emerald-700 border-emerald-200',
+    no_answer: 'bg-sky-50 text-sky-700 border-sky-200',
+    rejected:  'bg-rose-50 text-rose-600 border-rose-200',
+    error:     'bg-red-50 text-red-600 border-red-200',
+    calling:   'bg-blue-50 text-blue-700 border-blue-200',
+    pending:   'bg-gray-50 text-gray-400 border-gray-200',
+  }
+  const LABEL: Record<string, string> = { booked: 'Đặt lịch', no_answer: 'Không nghe', rejected: 'Từ chối', error: 'Lỗi', calling: 'Đang gọi', pending: 'Chờ' }
+
+  return (
+    <div className="mb-5 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b border-gray-100">
+        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shrink-0" />
+        <p className="text-xs font-bold text-gray-700 flex-1 truncate">Live · {running.name}</p>
+        <span className="text-xs text-gray-400 shrink-0 font-medium">{running.called_count}/{running.total_count} số</span>
+      </div>
+      <div className="max-h-44 overflow-y-auto divide-y divide-gray-50">
+        {results.map((r, i) => {
+          const outcome = getCallOutcome(r)
+          return (
+            <div key={i} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50/50 transition-colors">
+              <span className="text-base leading-none shrink-0">{EMOJI[outcome] ?? '📞'}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-gray-700 truncate">{r.name || r.phone}</p>
+                <p className="text-[10px] text-gray-400">{r.phone}</p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${BADGE[outcome] ?? ''}`}>
+                {LABEL[outcome] ?? outcome}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -435,7 +538,13 @@ function CrmSelector({
   )
 }
 
-// ── Create/Edit Modal ──────────────────────────────────────────────────────────
+// ── Create/Edit Modal (Wizard 3 bước) ─────────────────────────────────────────
+
+const SMART_RETRY_PRESETS = [
+  { label: 'Sáng hôm sau', hours: 18, icon: '🌅', desc: 'Gọi lại lúc sáng sớm ngày mai' },
+  { label: 'Chiều nay',    hours: 4,  icon: '☀️', desc: 'Gọi lại buổi chiều cùng ngày' },
+  { label: 'Hôm sau',      hours: 24, icon: '📅', desc: 'Gọi lại đúng 24h sau' },
+]
 
 function CreateModal({
   client, initial, onClose, onCreated,
@@ -446,28 +555,40 @@ function CreateModal({
   onCreated: (c: Campaign) => void
 }) {
   const { toast } = useToast()
-  const [name, setName] = useState(initial?.name ?? '')
+  const [step, setStep] = useState<1 | 2 | 3>(1)
+
+  // Step 1
+  const [name, setName]               = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
-  const [agentKey, setAgentKey] = useState<AgentKey>(initial?.agentKey ?? 'agent_cold_id')
-  const [delayMs, setDelayMs] = useState(3000)
-  const [retryEnabled, setRetryEnabled] = useState(false)
-  const [retryDelayHours, setRetryDelayHours] = useState(2)
-  const [retryMaxRetries, setRetryMaxRetries] = useState(2)
-  const [source, setSource] = useState<ContactSource>(initial?.source ?? 'excel')
+
+  // Step 2
+  const [source, setSource]       = useState<ContactSource>(initial?.source ?? 'excel')
   const [excelRows, setExcelRows] = useState<CampaignContact[]>(initial?.contacts ?? [])
-  const [crmRows, setCrmRows] = useState<CampaignContact[]>([])
-  const [saving, setSaving] = useState(false)
-  const [templatePicked, setTemplatePicked] = useState(false)
+  const [crmRows, setCrmRows]     = useState<CampaignContact[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Step 3
+  const [agentKey, setAgentKey]           = useState<AgentKey>(initial?.agentKey ?? 'agent_cold_id')
+  const [delayMs, setDelayMs]             = useState(3000)
+  const [callHoursEnabled, setCallHoursEnabled] = useState(false)
+  const [callHourFrom, setCallHourFrom]   = useState('08:00')
+  const [callHourTo, setCallHourTo]       = useState('17:30')
+  const [retryEnabled, setRetryEnabled]   = useState(false)
+  const [retryDelayHours, setRetryDelayHours] = useState(4)
+  const [retryMaxRetries, setRetryMaxRetries] = useState(2)
+  const [saving, setSaving]               = useState(false)
 
   const contacts = source === 'excel' ? excelRows : crmRows
   const opt = agentOpt(agentKey)
+
+  const step1Valid = name.trim().length > 0
+  const step2Valid = contacts.length > 0
 
   function applyTemplate(t: Template) {
     setAgentKey(t.agentKey)
     if (!name) setName(`${t.name} ${monthLabel()}`)
     if (!description) setDescription(t.descHint)
-    setTemplatePicked(true)
+    setStep(2)
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -485,11 +606,11 @@ function CreateModal({
           Object.keys(r)[i].toLowerCase().includes('sdt') ||
           /^\d{9,11}$/.test(String(v))
         ) || '').replace(/\D/g, '').replace(/^0/, '')
-        const name = String(Object.values(r).find((v, i) =>
+        const nm = String(Object.values(r).find((_v, i) =>
           Object.keys(r)[i].toLowerCase().includes('name') ||
           Object.keys(r)[i].toLowerCase().includes('tên')
         ) || '')
-        return { name, phone }
+        return { name: nm, phone }
       }).filter(r => r.phone.length >= 9)
       setExcelRows(parsed)
       toast(`Đã tải ${parsed.length} số`, 'success')
@@ -513,9 +634,12 @@ function CreateModal({
           agent_label: opt.label,
           delay_ms: delayMs,
           contacts,
-          retry_config: retryEnabled
-            ? { enabled: true, delay_hours: retryDelayHours, max_retries: retryMaxRetries }
-            : { enabled: false, delay_hours: 2, max_retries: 2 },
+          retry_config: {
+            enabled: retryEnabled,
+            delay_hours: retryDelayHours,
+            max_retries: retryMaxRetries,
+            call_schedule: callHoursEnabled ? { enabled: true, from: callHourFrom, to: callHourTo } : null,
+          },
         }),
       })
       const { campaign, error } = await res.json()
@@ -529,218 +653,326 @@ function CreateModal({
     }
   }
 
+  const STEP_LABELS = ['Đặt tên', 'Danh sách', 'Cài đặt']
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[92vh]">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div>
+        <div className="px-6 py-4 border-b border-gray-100 shrink-0">
+          <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-bold text-gray-800">Tạo chiến dịch mới</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Chọn template → Chọn danh sách → Bắt đầu</p>
+            <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
-            <X className="w-4 h-4 text-gray-400" />
-          </button>
+          {/* Step indicator */}
+          <div className="flex items-center gap-0">
+            {STEP_LABELS.map((label, i) => {
+              const s = i + 1
+              const done = step > s
+              const active = step === s
+              return (
+                <div key={s} className="flex items-center flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-all ${
+                      done ? 'bg-indigo-600 text-white' : active ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      {done ? '✓' : s}
+                    </div>
+                    <span className={`text-[11px] font-semibold hidden sm:block ${active ? 'text-indigo-700' : done ? 'text-gray-500' : 'text-gray-300'}`}>
+                      {label}
+                    </span>
+                  </div>
+                  {i < STEP_LABELS.length - 1 && (
+                    <div className={`flex-1 h-0.5 mx-2 rounded-full transition-all ${done ? 'bg-indigo-600' : 'bg-gray-100'}`} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
-          {/* Templates */}
-          {!templatePicked && (
-            <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2.5">Chọn nhanh theo loại chiến dịch</p>
-              <div className="grid grid-cols-2 gap-2">
-                {TEMPLATES.map(t => {
-                  const Icon = t.icon
-                  const avail = !!client[t.agentKey as keyof Client]
-                  return (
-                    <button key={t.id} onClick={() => applyTemplate(t)}
-                      disabled={!avail}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-all ${t.bg} ${t.border} disabled:opacity-40 disabled:cursor-not-allowed`}>
-                      <Icon className={`w-4 h-4 shrink-0 ${t.color}`} />
-                      <div className="min-w-0">
-                        <p className={`text-xs font-bold ${t.color} truncate`}>{t.name}</p>
-                        <p className="text-xs text-gray-400 truncate">{t.descHint}</p>
-                      </div>
-                      <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${t.color} opacity-60`} />
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="relative mt-3">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-100" />
+          {/* ── Step 1: Tên & Template ── */}
+          {step === 1 && (
+            <>
+              <div>
+                <p className="text-xs font-bold text-indigo-600 mb-3">Bắt đầu nhanh với template</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {TEMPLATES.map(t => {
+                    const Icon = t.icon
+                    const avail = !!client[t.agentKey as keyof Client]
+                    return (
+                      <button key={t.id} onClick={() => applyTemplate(t)} disabled={!avail}
+                        className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border text-left transition-all ${t.bg} ${t.border} disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-sm`}>
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-white/60`}>
+                          <Icon className={`w-4 h-4 ${t.color}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-bold ${t.color}`}>{t.name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{t.descHint}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {!avail && <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Chưa cấu hình</span>}
+                          <ChevronRight className={`w-4 h-4 shrink-0 ${t.color} opacity-50`} />
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
-                <div className="relative text-center">
-                  <span className="bg-white px-3 text-xs text-gray-400">hoặc tùy chỉnh</span>
+                <div className="relative my-4">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100" /></div>
+                  <div className="relative text-center"><span className="bg-white px-3 text-xs text-gray-400">hoặc tự đặt tên</span></div>
                 </div>
               </div>
-            </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-500 block mb-1.5">Tên chiến dịch *</label>
+                <input value={name} onChange={e => setName(e.target.value)}
+                  placeholder="VD: Telesale Implant tháng 5"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-500 block mb-1.5">Mô tả <span className="font-normal text-gray-400">(tuỳ chọn)</span></label>
+                <input value={description} onChange={e => setDescription(e.target.value)}
+                  placeholder="VD: Data Facebook Ads tháng 5"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              </div>
+            </>
           )}
 
-          {/* Tên */}
-          <div>
-            <label className="text-xs font-semibold text-gray-500 block mb-1.5">Tên chiến dịch *</label>
-            <input value={name} onChange={e => setName(e.target.value)}
-              placeholder="VD: Telesale Implant tháng 5"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-          </div>
-
-          {/* Mô tả */}
-          <div>
-            <label className="text-xs font-semibold text-gray-500 block mb-1.5">Mô tả</label>
-            <input value={description} onChange={e => setDescription(e.target.value)}
-              placeholder="VD: Data Facebook Ads tháng 5"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-          </div>
-
-          {/* Agent */}
-          <div>
-            <label className="text-xs font-semibold text-gray-500 block mb-2">Trợ lý AI *</label>
-            <div className="grid grid-cols-2 gap-2">
-              {AGENT_OPTIONS.map(o => {
-                const Icon = o.icon
-                const avail = !!client[o.key as keyof Client]
-                const active = agentKey === o.key
-                return (
-                  <button key={o.key} onClick={() => setAgentKey(o.key)} disabled={!avail}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition-all border ${
-                      active ? 'border-indigo-300 bg-indigo-50' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
-                    } disabled:opacity-40 disabled:cursor-not-allowed`}>
-                    <Icon className={`w-4 h-4 shrink-0 ${o.color}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-700 truncate">{o.label}</p>
-                    </div>
-                    {active && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Delay */}
-          <div>
-            <label className="text-xs font-semibold text-gray-500 block mb-2">
-              Độ trễ giữa các cuộc gọi — <span className="text-indigo-600 font-bold">{delayMs / 1000}s</span>
-            </label>
-            <input type="range" min={1000} max={10000} step={500} value={delayMs}
-              onChange={e => setDelayMs(Number(e.target.value))} className="w-full" />
-            <p className="text-xs text-gray-400 mt-1">Tránh bị block bởi nhà mạng</p>
-          </div>
-
-          {/* Retry config */}
-          <div className="border border-gray-100 rounded-2xl overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setRetryEnabled(v => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-2.5">
-                <RotateCcw className="w-4 h-4 text-sky-500" />
-                <div className="text-left">
-                  <p className="text-xs font-semibold text-gray-700">Tự gọi lại số không nghe</p>
-                  <p className="text-[11px] text-gray-400">Lên lịch gọi lại sau X giờ nếu không có người nghe</p>
-                </div>
-              </div>
-              <div className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${retryEnabled ? 'bg-sky-500' : 'bg-gray-200'}`}>
-                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${retryEnabled ? 'left-4' : 'left-0.5'}`} />
-              </div>
-            </button>
-            {retryEnabled && (
-              <div className="px-4 pb-3 pt-1 space-y-3 bg-sky-50/50 border-t border-sky-100">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <label className="text-xs font-semibold text-gray-500 block mb-1">
-                      Gọi lại sau — <span className="text-sky-600 font-bold">{retryDelayHours}h</span>
-                    </label>
-                    <input type="range" min={1} max={24} step={1} value={retryDelayHours}
-                      onChange={e => setRetryDelayHours(Number(e.target.value))} className="w-full" />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-xs font-semibold text-gray-500 block mb-1">
-                      Tối đa — <span className="text-sky-600 font-bold">{retryMaxRetries} lần</span>
-                    </label>
-                    <input type="range" min={1} max={5} step={1} value={retryMaxRetries}
-                      onChange={e => setRetryMaxRetries(Number(e.target.value))} className="w-full" />
-                  </div>
-                </div>
-                <p className="text-[11px] text-sky-600 bg-sky-100 rounded-lg px-2.5 py-1.5">
-                  Sau khi campaign xong, hệ thống sẽ tạo campaign mới và gọi lại {retryMaxRetries} lần, mỗi lần cách {retryDelayHours}h.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Contact source tabs */}
-          <div>
-            <div className="flex gap-1 mb-3 bg-gray-100 rounded-xl p-1">
-              <button onClick={() => setSource('crm')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  source === 'crm' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'
-                }`}>
-                <Users className="w-3.5 h-3.5" /> Từ Data khách
-              </button>
-              <button onClick={() => setSource('excel')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  source === 'excel' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'
-                }`}>
-                <Upload className="w-3.5 h-3.5" /> Upload Excel
-              </button>
-            </div>
-
-            {source === 'crm' ? (
-              <CrmSelector client={client} selectedPhones={new Set(crmRows.map(r => r.phone))} onSelect={setCrmRows} />
-            ) : (
+          {/* ── Step 2: Danh sách ── */}
+          {step === 2 && (
+            <>
               <div>
-                <p className="text-xs text-gray-400 mb-2">File Excel cần có cột Tên và Số điện thoại</p>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="hidden" />
-                {excelRows.length === 0 ? (
-                  <button onClick={() => fileRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-xl py-4 text-sm text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
-                    <Upload className="w-4 h-4" /> Chọn file Excel
+                <p className="text-xs font-bold text-indigo-600 mb-3">Nguồn danh sách</p>
+                <div className="flex gap-1 mb-4 bg-gray-100 rounded-xl p-1">
+                  <button onClick={() => setSource('crm')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${source === 'crm' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <Users className="w-3.5 h-3.5" /> Từ Data khách hàng
                   </button>
+                  <button onClick={() => setSource('excel')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${source === 'excel' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <Upload className="w-3.5 h-3.5" /> Upload Excel / CSV
+                  </button>
+                </div>
+
+                {source === 'crm' ? (
+                  <CrmSelector client={client} selectedPhones={new Set(crmRows.map(r => r.phone))} onSelect={setCrmRows} />
                 ) : (
-                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span className="text-sm font-semibold text-emerald-700">{excelRows.length} số điện thoại</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => fileRef.current?.click()} className="text-xs text-indigo-500 hover:underline">Đổi file</button>
-                      <button onClick={() => setExcelRows([])} className="text-gray-400 hover:text-red-500 transition-colors">
-                        <X className="w-4 h-4" />
+                  <div>
+                    <p className="text-xs text-gray-400 mb-3">File Excel cần có cột <strong>Tên</strong> và <strong>Số điện thoại</strong></p>
+                    <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="hidden" />
+                    {excelRows.length === 0 ? (
+                      <button onClick={() => fileRef.current?.click()}
+                        className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-200 rounded-2xl py-8 text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
+                        <Upload className="w-6 h-6" />
+                        <p className="text-sm font-semibold">Nhấn để chọn file</p>
+                        <p className="text-xs">.xlsx, .xls, .csv</p>
                       </button>
+                    ) : (
+                      <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-emerald-700">{excelRows.length} số điện thoại</p>
+                            <p className="text-xs text-emerald-600">Sẵn sàng để gọi</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => fileRef.current?.click()} className="text-xs text-indigo-500 hover:underline">Đổi file</button>
+                          <button onClick={() => setExcelRows([])} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {contacts.length > 0 && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-indigo-500 shrink-0" />
+                  <span className="text-sm font-semibold text-indigo-700">{contacts.length} số điện thoại sẵn sàng</span>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Step 3: Cài đặt ── */}
+          {step === 3 && (
+            <>
+              {/* AI Agent */}
+              <div>
+                <p className="text-xs font-bold text-indigo-600 mb-2">Trợ lý AI</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {AGENT_OPTIONS.map(o => {
+                    const Icon = o.icon
+                    const avail = !!client[o.key as keyof Client]
+                    const active = agentKey === o.key
+                    return (
+                      <button key={o.key} onClick={() => setAgentKey(o.key)} disabled={!avail}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all border ${
+                          active ? 'border-indigo-300 bg-indigo-50 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                        } disabled:opacity-40 disabled:cursor-not-allowed`}>
+                        <Icon className={`w-4 h-4 shrink-0 ${o.color}`} />
+                        <p className="text-sm font-semibold text-gray-700 flex-1">{o.label}</p>
+                        {active && <CheckCircle2 className="w-4 h-4 text-indigo-500 shrink-0" />}
+                        {!avail && <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Chưa cấu hình</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Delay */}
+              <div>
+                <label className="text-xs font-semibold text-gray-500 block mb-2">
+                  Độ trễ giữa các cuộc gọi — <span className="text-indigo-600 font-bold">{delayMs / 1000}s</span>
+                </label>
+                <input type="range" min={1000} max={10000} step={500} value={delayMs}
+                  onChange={e => setDelayMs(Number(e.target.value))} className="w-full accent-indigo-600" />
+                <div className="flex justify-between text-[10px] text-gray-300 mt-1">
+                  <span>1s (nhanh)</span><span>10s (chậm, an toàn hơn)</span>
+                </div>
+              </div>
+
+              {/* Khung giờ gọi */}
+              <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                <button type="button" onClick={() => setCallHoursEnabled(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 bg-amber-50 rounded-lg flex items-center justify-center shrink-0">
+                      <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs font-semibold text-gray-700">Chỉ gọi trong khung giờ</p>
+                      <p className="text-[11px] text-gray-400">Tránh gọi ngoài giờ hành chính</p>
+                    </div>
+                  </div>
+                  <div className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${callHoursEnabled ? 'bg-amber-400' : 'bg-gray-200'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${callHoursEnabled ? 'left-4' : 'left-0.5'}`} />
+                  </div>
+                </button>
+                {callHoursEnabled && (
+                  <div className="px-4 pb-4 pt-2 bg-amber-50/50 border-t border-amber-100 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-semibold text-gray-500 block mb-1.5">Từ giờ</label>
+                        <input type="time" value={callHourFrom} onChange={e => setCallHourFrom(e.target.value)}
+                          className="w-full border border-amber-200 bg-white rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-200" />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-gray-500 block mb-1.5">Đến giờ</label>
+                        <input type="time" value={callHourTo} onChange={e => setCallHourTo(e.target.value)}
+                          className="w-full border border-amber-200 bg-white rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-200" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {[['08:00','12:00','Sáng'], ['13:30','17:30','Chiều'], ['08:00','17:30','Cả ngày']].map(([f, t, l]) => (
+                        <button key={l} onClick={() => { setCallHourFrom(f); setCallHourTo(t) }}
+                          className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${callHourFrom === f && callHourTo === t ? 'bg-amber-400 border-amber-400 text-white' : 'bg-white border-amber-200 text-amber-700 hover:bg-amber-50'}`}>
+                          {l}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* Contact summary */}
-          {contacts.length > 0 && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-indigo-500 shrink-0" />
-              <span className="text-sm font-semibold text-indigo-700">
-                {contacts.length} số điện thoại sẵn sàng
-              </span>
-            </div>
+              {/* Smart Retry */}
+              <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                <button type="button" onClick={() => setRetryEnabled(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 bg-sky-50 rounded-lg flex items-center justify-center shrink-0">
+                      <RotateCcw className="w-3.5 h-3.5 text-sky-500" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs font-semibold text-gray-700">Tự gọi lại số không nghe</p>
+                      <p className="text-[11px] text-gray-400">Smart retry theo lịch tối ưu</p>
+                    </div>
+                  </div>
+                  <div className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${retryEnabled ? 'bg-sky-500' : 'bg-gray-200'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${retryEnabled ? 'left-4' : 'left-0.5'}`} />
+                  </div>
+                </button>
+                {retryEnabled && (
+                  <div className="px-4 pb-4 pt-3 bg-sky-50/50 border-t border-sky-100 space-y-3">
+                    <p className="text-[11px] font-semibold text-gray-500">Chọn nhanh</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {SMART_RETRY_PRESETS.map(p => (
+                        <button key={p.label} onClick={() => setRetryDelayHours(p.hours)}
+                          className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border text-center transition-all ${retryDelayHours === p.hours ? 'bg-sky-500 border-sky-500 text-white' : 'bg-white border-sky-100 text-gray-600 hover:border-sky-300'}`}>
+                          <span className="text-base leading-none">{p.icon}</span>
+                          <span className="text-[10px] font-bold">{p.label}</span>
+                          <span className={`text-[9px] ${retryDelayHours === p.hours ? 'text-sky-100' : 'text-gray-400'}`}>{p.hours}h sau</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1">
+                        <label className="text-[11px] font-semibold text-gray-500 block mb-1">
+                          Gọi lại sau — <span className="text-sky-600 font-bold">{retryDelayHours}h</span>
+                        </label>
+                        <input type="range" min={1} max={24} step={1} value={retryDelayHours}
+                          onChange={e => setRetryDelayHours(Number(e.target.value))} className="w-full accent-sky-500" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[11px] font-semibold text-gray-500 block mb-1">
+                          Tối đa — <span className="text-sky-600 font-bold">{retryMaxRetries} lần</span>
+                        </label>
+                        <input type="range" min={1} max={5} step={1} value={retryMaxRetries}
+                          onChange={e => setRetryMaxRetries(Number(e.target.value))} className="w-full accent-sky-500" />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-sky-700 bg-sky-100 rounded-xl px-3 py-2">
+                      Sẽ gọi lại <strong>{retryMaxRetries} lần</strong>, mỗi lần cách <strong>{retryDelayHours}h</strong>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3 shrink-0">
-          <button onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors">
-            Hủy
-          </button>
-          <button onClick={handleSave}
-            disabled={saving || !name.trim() || contacts.length === 0}
-            className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
-            {saving && <RefreshCw className="w-4 h-4 animate-spin" />}
-            Lưu chiến dịch
-          </button>
+          {step === 1 && (
+            <button onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors">
+              Hủy
+            </button>
+          )}
+          {step > 1 && (
+            <button onClick={() => setStep(s => (s - 1) as 1 | 2 | 3)}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-500 hover:bg-gray-50 transition-colors">
+              <ChevronLeft className="w-4 h-4" /> Quay lại
+            </button>
+          )}
+          {step < 3 && (
+            <button
+              onClick={() => setStep(s => (s + 1) as 1 | 2 | 3)}
+              disabled={step === 1 ? !step1Valid : !step2Valid}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-40">
+              Tiếp theo <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+          {step === 3 && (
+            <button onClick={handleSave} disabled={saving || contacts.length === 0}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors disabled:opacity-40">
+              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              Tạo chiến dịch
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1134,13 +1366,6 @@ function CampaignDetailModal({
 
 // ── Flow Builder ──────────────────────────────────────────────────────────────
 
-type MainTab = 'cold' | 'care' | 'facebook'
-
-const MAIN_TABS: { key: MainTab; label: string; sublabel: string; icon: React.ElementType; agentKey: AgentKey; color: string; active: string; border: string }[] = [
-  { key: 'cold',     label: 'Telesale Lạnh',  sublabel: 'Gọi lạnh & chốt lịch',    icon: PhoneOutgoing, agentKey: 'agent_cold_id',  color: 'text-blue-700',   active: 'bg-blue-600 text-white',   border: 'border-blue-300' },
-  { key: 'care',     label: 'Chăm Sóc',        sublabel: 'Chăm sóc khách hàng cũ',  icon: Heart,         agentKey: 'agent_cskh_id',  color: 'text-amber-700',  active: 'bg-amber-500 text-white',  border: 'border-amber-300' },
-  { key: 'facebook', label: 'Facebook Ads',    sublabel: 'Leads từ quảng cáo',       icon: Megaphone,     agentKey: 'agent_warm_id',  color: 'text-violet-700', active: 'bg-violet-600 text-white', border: 'border-violet-300' },
-]
 
 interface FlowStep {
   id: string
@@ -1656,6 +1881,9 @@ function CampaignSection({
 
   return (
     <div>
+      {/* Live feed when running */}
+      <LiveFeedPanel campaigns={campaigns} runningId={runningId} />
+
       {/* KPI row */}
       <div className="grid grid-cols-4 gap-3 mb-5">
         <KpiCard label="Đang chạy"        value={runningCount}   icon={RefreshCw}     topColor="bg-blue-500"   iconColor="text-blue-400" />
@@ -1724,7 +1952,6 @@ export default function CampaignsPage() {
   const [client, setClient] = useState<Client | null>(null)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<MainTab>('cold')
   const [showCreate, setShowCreate] = useState(false)
   const [createInitial, setCreateInitial] = useState<Parameters<typeof CreateModal>[0]['initial']>()
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null)
@@ -1906,76 +2133,20 @@ export default function CampaignsPage() {
         </div>
       </div>
 
-      {/* Main tabs — underline style */}
-      <div className="flex border-b border-gray-200 mb-6 -mx-1">
-        {MAIN_TABS.map(tab => {
-          const Icon = tab.icon
-          const isActive = activeTab === tab.key
-          const count = campaigns.filter(c => c.agent_key === tab.agentKey).length
-          const activeUnderline = tab.key === 'cold' ? 'border-blue-600' : tab.key === 'care' ? 'border-amber-500' : 'border-violet-600'
-          const activeText = tab.key === 'cold' ? 'text-blue-700' : tab.key === 'care' ? 'text-amber-700' : 'text-violet-700'
-          const activeBadge = tab.key === 'cold' ? 'bg-blue-100 text-blue-700' : tab.key === 'care' ? 'bg-amber-100 text-amber-700' : 'bg-violet-100 text-violet-700'
-          return (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-semibold transition-all -mb-px ${
-                isActive
-                  ? `${activeUnderline} ${activeText}`
-                  : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-300'
-              }`}>
-              <Icon className="w-4 h-4" />
-              {tab.label}
-              {count > 0 && (
-                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isActive ? activeBadge : 'bg-gray-100 text-gray-500'}`}>
-                  {count}
-                </span>
-              )}
-            </button>
-          )
-        })}
+      <StatsHero campaigns={campaigns} />
+      <FlowBuilderCard client={client} />
+      <ManualCallPanel client={client} />
+      <div className="mt-2">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Gọi Hàng Loạt</p>
+        <CampaignSection
+          client={client}
+          campaigns={campaigns.filter(c => c.agent_key === 'agent_cold_id')}
+          agentKey="agent_cold_id"
+          runningId={runningId}
+          {...sharedHandlers}
+          onOpenCreate={() => openCreate('agent_cold_id')}
+        />
       </div>
-
-      {/* Tab: Telesale Lạnh */}
-      {activeTab === 'cold' && (
-        <>
-          <FlowBuilderCard client={client} />
-          <ManualCallPanel client={client} />
-          <div className="mt-2">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Gọi Hàng Loạt</p>
-            <CampaignSection
-              client={client}
-              campaigns={campaigns.filter(c => c.agent_key === 'agent_cold_id')}
-              agentKey="agent_cold_id"
-              runningId={runningId}
-              {...sharedHandlers}
-              onOpenCreate={() => openCreate('agent_cold_id')}
-            />
-          </div>
-        </>
-      )}
-
-      {/* Tab: Chăm Sóc */}
-      {activeTab === 'care' && (
-        <CampaignSection
-          client={client}
-          campaigns={campaigns.filter(c => c.agent_key === 'agent_cskh_id')}
-          agentKey="agent_cskh_id"
-          runningId={runningId}
-          {...sharedHandlers}
-          onOpenCreate={() => openCreate('agent_cskh_id')}
-        />
-      )}
-
-      {/* Tab: Facebook Ads */}
-      {activeTab === 'facebook' && (
-        <CampaignSection
-          client={client}
-          campaigns={campaigns.filter(c => c.agent_key === 'agent_warm_id')}
-          agentKey="agent_warm_id"
-          runningId={runningId}
-          {...sharedHandlers}
-          onOpenCreate={() => openCreate('agent_warm_id')}
-        />
-      )}
 
       {/* Modals */}
       {showCreate && client && (
