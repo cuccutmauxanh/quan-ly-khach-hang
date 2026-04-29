@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import AppShell from '@/components/ui/app-shell'
 import { PageSkeleton } from '@/components/skeleton'
 import { useToast } from '@/components/toast'
-import { MessageSquare, Send, Users, ChevronDown, CheckCircle, Clock } from 'lucide-react'
+import { MessageSquare, Send, Users, CheckCircle, Clock, AlertCircle, TrendingUp } from 'lucide-react'
 
 type Template = { id: string; label: string; content: string }
 const TEMPLATES: Template[] = [
@@ -17,13 +17,16 @@ const TEMPLATES: Template[] = [
   { id: 'custom',  label: 'Tùy chỉnh',             content: '' },
 ]
 
-type Filter = 'all' | 'booked' | 'high_interest' | 'uncalled'
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'all',           label: 'Tất cả' },
-  { key: 'booked',        label: 'Đã đặt lịch' },
-  { key: 'high_interest', label: 'Quan tâm cao' },
-  { key: 'uncalled',      label: 'Chưa gọi' },
+type Filter = 'all' | 'booked' | 'high_interest' | 'uncalled' | 'no_answer'
+const FILTERS: { key: Filter; label: string; desc: string }[] = [
+  { key: 'all',           label: 'Tất cả',        desc: 'Toàn bộ danh sách' },
+  { key: 'booked',        label: 'Đã đặt lịch',   desc: 'Nhắc lịch khám' },
+  { key: 'high_interest', label: 'Quan tâm cao',  desc: 'Lead nóng' },
+  { key: 'uncalled',      label: 'Chưa gọi',      desc: 'Tiếp cận lần đầu' },
+  { key: 'no_answer',     label: 'Không nghe',     desc: 'Chưa liên hệ được' },
 ]
+
+const BATCH_SIZE = 8
 
 type SendResult = { phone: string; name: string; status: 'sent' | 'error'; message?: string }
 
@@ -32,12 +35,14 @@ export default function SmsPage() {
   const { toast } = useToast()
   const [client, setClient] = useState<Client | null>(null)
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [noAnswerIds, setNoAnswerIds] = useState<Set<string>>(new Set())
   const [bookedIds, setBookedIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<Filter>('booked')
   const [selectedTemplate, setSelectedTemplate] = useState<Template>(TEMPLATES[0])
   const [customMsg, setCustomMsg] = useState('')
   const [sending, setSending] = useState(false)
+  const [sendProgress, setSendProgress] = useState(0)
   const [results, setResults] = useState<SendResult[]>([])
 
   useEffect(() => {
@@ -48,12 +53,14 @@ export default function SmsPage() {
       if (!cu) { setLoading(false); return }
       const { data: c } = await supabase.from('clients').select('*').eq('id', cu.client_id).single()
       setClient(c)
-      const [{ data: ctcs }, { data: appts }] = await Promise.all([
+      const [{ data: ctcs }, { data: appts }, { data: calls }] = await Promise.all([
         supabase.from('contacts').select('*').eq('tenant_id', cu.client_id).order('created_at', { ascending: false }),
         supabase.from('appointments').select('contact_id').eq('tenant_id', cu.client_id).neq('status', 'cancelled'),
+        supabase.from('calls').select('contact_phone, status').eq('tenant_id', cu.client_id).eq('status', 'no_answer'),
       ])
       setContacts(ctcs ?? [])
       setBookedIds(new Set((appts ?? []).map(a => a.contact_id).filter(Boolean) as string[]))
+      setNoAnswerIds(new Set((calls ?? []).map(c => c.contact_phone).filter(Boolean) as string[]))
       setLoading(false)
     }
     init()
@@ -63,6 +70,7 @@ export default function SmsPage() {
     if (filter === 'booked')        return bookedIds.has(c.id)
     if (filter === 'high_interest') return c.interest_level === 'high'
     if (filter === 'uncalled')      return (c.call_count ?? 0) === 0
+    if (filter === 'no_answer')     return noAnswerIds.has(c.phone)
     return true
   })
 
@@ -73,39 +81,39 @@ export default function SmsPage() {
       .replace('{datetime}', 'thời gian đã đặt')
   }
 
+  async function sendOne(contact: Contact): Promise<SendResult> {
+    const msg   = preview(contact)
+    const phone = contact.phone.startsWith('+84') ? contact.phone : `+84${contact.phone.replace(/^0/, '')}`
+    try {
+      const r = await fetch('https://letanai.tino.page/webhook/saas-send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, message: msg, tenant_id: client?.id, contact_id: contact.id }),
+      })
+      return { phone: contact.phone, name: contact.full_name || contact.phone, status: r.ok ? 'sent' : 'error' }
+    } catch {
+      return { phone: contact.phone, name: contact.full_name || contact.phone, status: 'error', message: 'Lỗi kết nối' }
+    }
+  }
+
   async function sendAll() {
     if (!message || filtered.length === 0) return
     setSending(true)
+    setSendProgress(0)
     setResults([])
 
-    const res: SendResult[] = []
-    for (const contact of filtered) {
-      const msg = preview(contact)
-      const phone = contact.phone.startsWith('+84') ? contact.phone
-        : `+84${contact.phone.replace(/^0/, '')}`
-
-      // Gửi qua n8n webhook (SMS/Zalo gateway)
-      try {
-        const r = await fetch(`https://letanai.tino.page/webhook/saas-send-sms`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: msg,
-            tenant_id: client?.id,
-            contact_id: contact.id,
-          }),
-        })
-        res.push({ phone: contact.phone, name: contact.full_name || contact.phone, status: r.ok ? 'sent' : 'error' })
-      } catch {
-        res.push({ phone: contact.phone, name: contact.full_name || contact.phone, status: 'error', message: 'Không kết nối được' })
-      }
-
-      setResults([...res])
+    const allResults: SendResult[] = []
+    for (let i = 0; i < filtered.length; i += BATCH_SIZE) {
+      const batch = filtered.slice(i, i + BATCH_SIZE)
+      const batchResults = await Promise.all(batch.map(sendOne))
+      allResults.push(...batchResults)
+      setResults([...allResults])
+      setSendProgress(Math.round((allResults.length / filtered.length) * 100))
     }
+
     setSending(false)
-    const ok = res.filter(r => r.status === 'sent').length
-    toast(`Đã gửi ${ok}/${res.length} tin nhắn`, ok === res.length ? 'success' : 'error')
+    const ok = allResults.filter(r => r.status === 'sent').length
+    toast(`Đã gửi ${ok}/${allResults.length} tin nhắn`, ok === allResults.length ? 'success' : 'error')
   }
 
   if (loading) return <PageSkeleton />
@@ -158,28 +166,50 @@ export default function SmsPage() {
           {/* Filter nhóm */}
           <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
             <label className="text-xs font-semibold text-gray-500 block mb-3">Nhóm khách nhận</label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {FILTERS.map(f => (
-                <button key={f.key} onClick={() => setFilter(f.key)}
-                  className={`py-2 px-3 rounded-xl text-xs font-medium transition-colors border ${
-                    filter === f.key ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-100 hover:bg-gray-50 text-gray-600'
-                  }`}>
-                  {f.label}
-                </button>
-              ))}
+            <div className="space-y-1.5">
+              {FILTERS.map(f => {
+                const count = contacts.filter(c => {
+                  if (f.key === 'booked')        return bookedIds.has(c.id)
+                  if (f.key === 'high_interest') return c.interest_level === 'high'
+                  if (f.key === 'uncalled')      return (c.call_count ?? 0) === 0
+                  if (f.key === 'no_answer')     return noAnswerIds.has(c.phone)
+                  return true
+                }).length
+                return (
+                  <button key={f.key} onClick={() => setFilter(f.key)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-colors border ${
+                      filter === f.key ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-100 hover:bg-gray-50 text-gray-600'
+                    }`}>
+                    <span>{f.label}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filter === f.key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>{count}</span>
+                  </button>
+                )
+              })}
             </div>
-            <div className="mt-3 flex items-center gap-2 text-sm">
-              <Users className="w-4 h-4 text-gray-400" />
-              <span className="font-semibold text-gray-700">{filtered.length} người nhận</span>
+            <div className="mt-3 flex items-center gap-2 pt-3 border-t border-gray-100">
+              <Users className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-xs font-semibold text-gray-700">{filtered.length} người nhận</span>
+              {filtered.length > 0 && (
+                <span className="text-xs text-gray-400 ml-auto">~{Math.ceil(filtered.length / BATCH_SIZE)} batches</span>
+              )}
             </div>
           </div>
 
           {/* Send button */}
-          <button onClick={sendAll} disabled={sending || !message || filtered.length === 0}
-            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">
-            {sending ? <><Clock className="w-4 h-4 animate-spin" /> Đang gửi...</>
-              : <><Send className="w-4 h-4" /> Gửi {filtered.length} tin nhắn</>}
-          </button>
+          <div className="space-y-2">
+            <button onClick={sendAll} disabled={sending || !message || filtered.length === 0}
+              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">
+              {sending
+                ? <><Clock className="w-4 h-4 animate-spin" /> Đang gửi {sendProgress}%</>
+                : <><Send className="w-4 h-4" /> Gửi {filtered.length} tin nhắn</>}
+            </button>
+            {sending && (
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-500 rounded-full transition-all duration-300"
+                  style={{ width: `${sendProgress}%` }} />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Preview & Results */}
