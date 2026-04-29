@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { supabase, type Client, type Call } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import {
-  TrendingUp, Phone, CalendarCheck, Users, Star, PhoneMissed, Download,
+  TrendingUp, TrendingDown, Phone, CalendarCheck, Users, Star, PhoneMissed, Download,
   CheckCircle, AlertCircle, Clock, Lightbulb, BarChart2 as BarChart2Icon,
-  Flame, MessageSquare,
+  Flame, MessageSquare, Target, CalendarDays,
 } from 'lucide-react'
 import AppShell from '@/components/ui/app-shell'
 import { PageSkeleton } from '@/components/skeleton'
@@ -264,6 +264,90 @@ function calcTopics(calls: Call[]) {
   return { topics: raw.map(t => ({ ...t, pct: total > 0 ? Math.round((t.count / total) * 100) : 0 })), withSummary }
 }
 
+// ── Feature 5: Smart Alerts ───────────────────────────────────────────────────
+
+type SmartAlert = { type: 'critical' | 'warning' | 'good'; title: string; desc: string }
+
+function calcAlerts(calls: Call[]): SmartAlert[] {
+  const now = Date.now()
+  const DAY = 24 * 3600 * 1000
+  const last7  = calls.filter(c => now - new Date(c.created_at).getTime() <= 7 * DAY)
+  const prev7  = calls.filter(c => { const a = now - new Date(c.created_at).getTime(); return a > 7 * DAY && a <= 14 * DAY })
+  const last24 = calls.filter(c => now - new Date(c.created_at).getTime() <= DAY)
+
+  const alerts: SmartAlert[] = []
+
+  if (last7.length >= 5 && prev7.length >= 5) {
+    const r1 = last7.filter(c => c.status !== 'no_answer').length / last7.length
+    const r2 = prev7.filter(c => c.status !== 'no_answer').length / prev7.length
+    const diff = r1 - r2
+    if (diff <= -0.15)
+      alerts.push({ type: 'critical', title: `Tỷ lệ nghe máy giảm ${Math.round(Math.abs(diff) * 100)}%`, desc: `7 ngày qua: ${Math.round(r1 * 100)}% vs tuần trước: ${Math.round(r2 * 100)}%. Kiểm tra lại khung giờ gọi.` })
+    else if (diff >= 0.10)
+      alerts.push({ type: 'good', title: `Tỷ lệ nghe máy tăng ${Math.round(diff * 100)}%`, desc: `7 ngày qua: ${Math.round(r1 * 100)}% vs tuần trước: ${Math.round(r2 * 100)}%. Đang đúng hướng!` })
+  }
+
+  const noAnswer24 = last24.filter(c => c.status === 'no_answer').length
+  if (noAnswer24 >= 15)
+    alerts.push({ type: 'warning', title: `${noAnswer24} cuộc không nghe máy trong 24h qua`, desc: 'Cao hơn mức bình thường. Retry tự động đang xử lý, hoặc thử đổi khung giờ gọi.' })
+
+  const booked24 = last24.filter(c => c.appointment_booked).length
+  if (booked24 >= 3)
+    alerts.push({ type: 'good', title: `${booked24} lịch hẹn mới hôm nay!`, desc: 'Ngày hiệu quả — AI agent đang hoạt động tốt.' })
+
+  const retryExhausted = calls.filter(c => c.retry_count >= 4 && !c.appointment_booked).length
+  if (retryExhausted >= 10)
+    alerts.push({ type: 'warning', title: `${retryExhausted} liên hệ đã hết lượt retry`, desc: 'Những số này cần được xem xét lại thủ công hoặc loại khỏi danh sách.' })
+
+  return alerts
+}
+
+// ── Feature 6: ROI ─────────────────────────────────────────────────────────────
+
+function calcROI(calls: Call[]) {
+  const now = Date.now()
+  const DAY = 24 * 3600 * 1000
+  const booked   = calls.filter(c => c.appointment_booked).length
+  const thisWeek = calls.filter(c => now - new Date(c.created_at).getTime() <= 7 * DAY)
+  const lastWeek = calls.filter(c => { const a = now - new Date(c.created_at).getTime(); return a > 7 * DAY && a <= 14 * DAY })
+
+  const callsPerBooking  = booked > 0 ? Math.round(calls.length / booked) : null
+  const totalMins        = Math.round(calls.reduce((s, c) => s + (c.duration_seconds ?? 90) / 60, 0))
+  const minutesPerBooking = booked > 0 ? Math.round(totalMins / booked) : null
+  const thisWeekBooked   = thisWeek.filter(c => c.appointment_booked).length
+  const lastWeekBooked   = lastWeek.filter(c => c.appointment_booked).length
+  const trend            = lastWeek.length > 0 ? thisWeekBooked - lastWeekBooked : null
+
+  return { callsPerBooking, minutesPerBooking, thisWeekBooked, lastWeekBooked, trend }
+}
+
+// ── Feature 7: Forecast ────────────────────────────────────────────────────────
+
+function calcForecast(calls: Call[]) {
+  const now = Date.now()
+  const DAY = 24 * 3600 * 1000
+  const last14 = calls.filter(c => now - new Date(c.created_at).getTime() <= 14 * DAY)
+  if (last14.length < 5) return null
+
+  const dailyBooked = Array.from({ length: 14 }, (_, i) => {
+    const start = new Date(now - (i + 1) * DAY); start.setHours(0, 0, 0, 0)
+    const end   = new Date(now - i * DAY);        end.setHours(23, 59, 59, 999)
+    return last14.filter(c => { const d = new Date(c.created_at); return d >= start && d <= end && c.appointment_booked }).length
+  })
+
+  const weights = dailyBooked.map((_, i) => 14 - i)
+  const weightSum = weights.reduce((s, w) => s + w, 0)
+  const weightedAvg = dailyBooked.reduce((s, cnt, i) => s + cnt * weights[i], 0) / weightSum
+
+  const dailyCalls = last14.length / 14
+  return {
+    forecastNext7: Math.max(Math.round(weightedAvg * 7), 0),
+    forecastCalls: Math.round(dailyCalls * 7),
+    actualLast7:   dailyBooked.slice(0, 7).reduce((s, c) => s + c, 0),
+    dailyRate:     Math.round(weightedAvg * 10) / 10,
+  }
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'insights'
@@ -347,6 +431,9 @@ export default function AnalyticsPage() {
   const heatmap        = calcHeatmap(calls)
   const dropoff        = calcDropoff(calls)
   const { topics, withSummary } = calcTopics(calls)
+  const alerts         = calcAlerts(calls)
+  const roi            = calcROI(calls)
+  const forecast       = calcForecast(calls)
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Tổng quan' },
@@ -524,8 +611,31 @@ export default function AnalyticsPage() {
       {/* ── AI Insights tab ────────────────────────────────────────────────────── */}
       {tab === 'insights' && (
         <>
+          {/* Smart Alerts */}
+          {alerts.length > 0 && (
+            <div className="space-y-2 mb-5">
+              {alerts.map((alert, i) => (
+                <div key={i} className={`flex items-start gap-3 p-3.5 rounded-xl border text-sm ${
+                  alert.type === 'critical' ? 'bg-red-50 border-red-200' :
+                  alert.type === 'warning'  ? 'bg-amber-50 border-amber-200' :
+                  'bg-green-50 border-green-200'
+                }`}>
+                  <div className="shrink-0 mt-0.5">
+                    {alert.type === 'good'
+                      ? <CheckCircle className="w-4 h-4 text-green-500" />
+                      : <AlertCircle className={`w-4 h-4 ${alert.type === 'critical' ? 'text-red-500' : 'text-amber-500'}`} />}
+                  </div>
+                  <div>
+                    <p className={`font-semibold text-sm ${alert.type === 'critical' ? 'text-red-800' : alert.type === 'warning' ? 'text-amber-800' : 'text-green-800'}`}>{alert.title}</p>
+                    <p className={`text-xs mt-0.5 ${alert.type === 'critical' ? 'text-red-600' : alert.type === 'warning' ? 'text-amber-600' : 'text-green-600'}`}>{alert.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* KPI nhanh */}
-          <div className="grid grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-4 gap-3 mb-4">
             {[
               { label: 'Tổng cuộc gọi',     value: total,     Icon: Phone,        color: 'text-indigo-600', bg: 'bg-indigo-50' },
               { label: 'Kết nối thành công', value: completed, Icon: CheckCircle,  color: 'text-green-600',  bg: 'bg-green-50' },
@@ -543,6 +653,68 @@ export default function AnalyticsPage() {
                 </div>
               )
             })}
+          </div>
+
+          {/* ROI + Forecast row */}
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            {/* Chi phí / Đặt lịch */}
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl border border-indigo-200 p-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Target className="w-3.5 h-3.5 text-indigo-500" />
+                <p className="text-xs text-indigo-600 font-semibold">Chi phí / Đặt lịch</p>
+              </div>
+              <p className="text-2xl font-bold text-indigo-800">
+                {roi.callsPerBooking ? roi.callsPerBooking : '—'}
+                {roi.callsPerBooking && <span className="text-sm font-normal text-indigo-600 ml-1">cuộc gọi</span>}
+              </p>
+              <p className="text-xs text-indigo-400 mt-1">
+                {roi.minutesPerBooking ? `~${roi.minutesPerBooking} phút thời gian` : 'Chưa có đặt lịch nào'}
+              </p>
+            </div>
+
+            {/* Trend tuần */}
+            <div className={`rounded-2xl border p-4 ${
+              roi.trend !== null && roi.trend > 0 ? 'bg-green-50 border-green-200' :
+              roi.trend !== null && roi.trend < 0 ? 'bg-red-50 border-red-200' :
+              'bg-gray-50 border-gray-200'
+            }`}>
+              <div className="flex items-center gap-1.5 mb-2">
+                {roi.trend !== null && roi.trend >= 0
+                  ? <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+                  : <TrendingDown className="w-3.5 h-3.5 text-red-400" />}
+                <p className="text-xs font-semibold text-gray-600">Lịch hẹn tuần này</p>
+              </div>
+              <div className="flex items-end gap-2">
+                <p className="text-2xl font-bold text-gray-800">{roi.thisWeekBooked}</p>
+                {roi.trend !== null && (
+                  <span className={`text-sm font-semibold mb-0.5 ${roi.trend > 0 ? 'text-green-600' : roi.trend < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                    {roi.trend > 0 ? `+${roi.trend}` : roi.trend}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">tuần trước: {roi.lastWeekBooked}</p>
+            </div>
+
+            {/* Dự báo */}
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl border border-purple-200 p-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <CalendarDays className="w-3.5 h-3.5 text-purple-500" />
+                <p className="text-xs text-purple-600 font-semibold">Dự báo tuần tới</p>
+              </div>
+              {forecast ? (
+                <>
+                  <p className="text-2xl font-bold text-purple-800">~{forecast.forecastNext7}
+                    <span className="text-sm font-normal text-purple-500 ml-1">lịch hẹn</span>
+                  </p>
+                  <p className="text-xs text-purple-400 mt-1">~{forecast.forecastCalls} cuộc gọi dự kiến</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-purple-800">—</p>
+                  <p className="text-xs text-purple-400 mt-1">Cần thêm dữ liệu</p>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Priority Queue */}
