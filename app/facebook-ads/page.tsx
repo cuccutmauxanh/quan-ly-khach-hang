@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   Megaphone, RefreshCw, Phone, Edit2, CheckCircle2,
   Plus, X, ChevronRight, Clock, User, Target,
-  AlertCircle, Loader2, ExternalLink,
+  AlertCircle, Loader2, Search, Flame, TrendingUp,
 } from 'lucide-react'
 import AppShell from '@/components/ui/app-shell'
 import { PageSkeleton } from '@/components/skeleton'
@@ -469,6 +469,11 @@ export default function FacebookAdsPage() {
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null)
   const [callingLeadId, setCallingLeadId] = useState<string | null>(null)
 
+  // Filter state
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState<LeadStatus | 'all'>('all')
+  const [filterPriority, setFilterPriority] = useState<Priority | 'all'>('all')
+
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ── Auth ────────────────────────────────────────────────────────────────────
@@ -573,9 +578,18 @@ export default function FacebookAdsPage() {
     setCallingLeadId(null)
   }
 
-  const campaignLeads = activeCampaignId
-    ? leads.filter(l => l.fb_campaign_id === activeCampaignId)
-    : leads
+  const campaignLeads = leads
+    .filter(l => !activeCampaignId || l.fb_campaign_id === activeCampaignId)
+    .filter(l => filterStatus === 'all' || l.lead_status === filterStatus)
+    .filter(l => filterPriority === 'all' || l.priority === filterPriority)
+    .filter(l => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      return (l.commenter_name ?? '').toLowerCase().includes(q)
+        || (l.real_name ?? '').toLowerCase().includes(q)
+        || (l.phone ?? '').includes(q)
+        || (l.raw_comment ?? '').toLowerCase().includes(q)
+    })
 
   const getCampaignName = (id: string | null) =>
     id ? (campaigns.find(c => c.id === id)?.name ?? id.slice(0, 8)) : 'Không rõ'
@@ -634,45 +648,68 @@ export default function FacebookAdsPage() {
         {/* ── TAB 1: LEADS ──────────────────────────────────────────────────── */}
         {activeTab === 'leads' && (
           <div className="space-y-4">
-            {/* Stats Header */}
-            <div className="flex items-center gap-4">
-              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="text-2xl font-bold text-gray-800">{todayLeads.length}</div>
-                <div>
-                  <p className="text-xs text-gray-500">Hôm nay</p>
-                  <p className="text-xs font-medium text-gray-700">Leads mới</p>
+            {/* Stats KPIs */}
+            {(() => {
+              const hotCount     = leads.filter(l => l.priority === 'HOT' && l.lead_status === 'new').length
+              const bookedToday  = leads.filter(l => l.lead_status === 'booked' && new Date(l.created_at).toDateString() === new Date().toDateString()).length
+              const convRate     = leads.length > 0 ? Math.round((leads.filter(l => l.lead_status === 'booked').length / leads.length) * 100) : 0
+              return (
+                <div className="grid grid-cols-5 gap-3">
+                  {[
+                    { label: 'Leads hôm nay',   value: todayLeads.length,          icon: <Megaphone className="w-4 h-4 text-blue-500" />,  bg: 'bg-blue-50',   sub: '24 giờ qua' },
+                    { label: 'HOT chưa xử lý',  value: hotCount,                    icon: <Flame className="w-4 h-4 text-red-500" />,        bg: 'bg-red-50',    sub: 'Ưu tiên gọi ngay' },
+                    { label: 'Chưa liên hệ',    value: unprocessed,                 icon: <Clock className="w-4 h-4 text-orange-500" />,     bg: 'bg-orange-50', sub: 'Cần xử lý' },
+                    { label: 'Đặt lịch hôm nay',value: bookedToday,                 icon: <CheckCircle2 className="w-4 h-4 text-green-500" />,bg: 'bg-green-50', sub: 'Thành công' },
+                    { label: 'Tỷ lệ chuyển đổi',value: `${convRate}%`,              icon: <TrendingUp className="w-4 h-4 text-purple-500" />, bg: 'bg-purple-50', sub: `${leads.length} tổng leads` },
+                  ].map(k => (
+                    <div key={k.label} className="bg-white rounded-2xl border border-gray-100 p-3.5 shadow-sm">
+                      <div className={`w-7 h-7 ${k.bg} rounded-lg flex items-center justify-center mb-2`}>{k.icon}</div>
+                      <p className="text-xl font-bold text-gray-800">{k.value}</p>
+                      <p className="text-xs text-gray-500 leading-tight mt-0.5">{k.label}</p>
+                      <p className="text-xs text-gray-300 mt-0.5">{k.sub}</p>
+                    </div>
+                  ))}
                 </div>
-              </div>
-              <div className="bg-white border border-orange-200 rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="text-2xl font-bold text-orange-500">{unprocessed}</div>
-                <div>
-                  <p className="text-xs text-gray-500">Chưa xử lý</p>
-                  <p className="text-xs font-medium text-gray-700">Cần liên hệ</p>
-                </div>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
-                <div className="text-2xl font-bold text-gray-800">{leads.length}</div>
-                <div>
-                  <p className="text-xs text-gray-500">Tổng</p>
-                  <p className="text-xs font-medium text-gray-700">Tất cả leads</p>
-                </div>
+              )
+            })()}
+
+            {/* Search + Filters */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-48">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Tìm tên, SĐT, bình luận..."
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+                />
               </div>
 
-              {/* Campaign Filter */}
+              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as LeadStatus | 'all')}
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
+                <option value="all">Tất cả trạng thái</option>
+                {(Object.keys(LEAD_STATUS_MAP) as LeadStatus[]).map(s => (
+                  <option key={s} value={s}>{LEAD_STATUS_MAP[s].label}</option>
+                ))}
+              </select>
+
+              <select value={filterPriority} onChange={e => setFilterPriority(e.target.value as Priority | 'all')}
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
+                <option value="all">Tất cả mức độ</option>
+                {(Object.keys(PRIORITY_MAP) as Priority[]).map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+
               {campaigns.length > 0 && (
-                <div className="ml-auto">
-                  <select
-                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
-                    value={activeCampaignId ?? ''}
-                    onChange={e => setActiveCampaignId(e.target.value || null)}
-                  >
-                    <option value="">Tất cả chiến dịch</option>
-                    {campaigns.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
+                <select value={activeCampaignId ?? ''} onChange={e => setActiveCampaignId(e.target.value || null)}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
+                  <option value="">Tất cả chiến dịch</option>
+                  {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
               )}
+
+              <span className="text-xs text-gray-400 ml-auto">{campaignLeads.length} leads</span>
             </div>
 
             {/* Lead List */}
@@ -744,6 +781,20 @@ export default function FacebookAdsPage() {
                             <p className="text-xs text-gray-400 mt-1.5 line-clamp-1 italic">
                               "{lead.raw_comment}"
                             </p>
+                          )}
+                          {lead.lead_score !== null && (
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <span className="text-xs text-gray-400">Score:</span>
+                              <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full"
+                                  style={{
+                                    width: `${Math.min(lead.lead_score, 100)}%`,
+                                    backgroundColor: lead.lead_score >= 70 ? '#22c55e' : lead.lead_score >= 40 ? '#f59e0b' : '#ef4444',
+                                  }}
+                                />
+                              </div>
+                              <span className="text-xs font-medium text-gray-600">{lead.lead_score}</span>
+                            </div>
                           )}
                         </div>
 
