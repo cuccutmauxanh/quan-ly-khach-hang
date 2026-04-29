@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   RefreshCw, X, PhoneIncoming, PhoneOutgoing, PhoneMissed,
   CalendarCheck, Clock, Search, Download, Mic, Phone,
+  ChevronDown, ChevronRight, Users, List,
 } from 'lucide-react'
 import AppShell from '@/components/ui/app-shell'
 import { PageSkeleton } from '@/components/skeleton'
@@ -20,17 +21,25 @@ function fmtTime(s: string) {
 function fmtDuration(s: number | null) {
   if (!s || s === 0) return null
   if (s < 60) return `${s}s`
-  return `${Math.floor(s/60)}p${s%60 > 0 ? `${s%60}s` : ''}`
+  return `${Math.floor(s/60)}p${s % 60 > 0 ? `${s % 60}s` : ''}`
 }
 
 function dayLabel(iso: string): string {
-  const d = new Date(iso)
+  const d   = new Date(iso)
   const now = new Date()
   const diff = Math.floor((now.setHours(0,0,0,0) - new Date(d.toDateString()).getTime()) / 86400000)
   if (diff === 0) return 'Hôm nay'
   if (diff === 1) return 'Hôm qua'
   const days = ['CN','T2','T3','T4','T5','T6','T7']
   return `${days[d.getDay()]} ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
+}
+
+function timeAgo(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (diff < 60)    return `${diff}s trước`
+  if (diff < 3600)  return `${Math.floor(diff/60)} phút trước`
+  if (diff < 86400) return `${Math.floor(diff/3600)} giờ trước`
+  return dayLabel(iso)
 }
 
 function calcScore(call: Call) {
@@ -67,27 +76,24 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
   const score = calcScore(call)
   const isIn  = call.direction === 'inbound'
   const noAns = call.status === 'no_answer'
-
-  const scoreClr = score >= 80 ? { cls: 'bg-emerald-50 text-emerald-700', bar: 'bg-emerald-500', label: 'Xuất sắc' }
-                 : score >= 60 ? { cls: 'bg-blue-50 text-blue-700',       bar: 'bg-blue-500',    label: 'Tốt'      }
-                 : score >= 40 ? { cls: 'bg-amber-50 text-amber-700',     bar: 'bg-amber-500',   label: 'Trung bình' }
-                 :               { cls: 'bg-red-50 text-red-600',          bar: 'bg-red-400',     label: 'Thấp'     }
+  const scoreClr = score >= 80 ? { cls:'bg-emerald-50 text-emerald-700', bar:'bg-emerald-500', label:'Xuất sắc'  }
+                 : score >= 60 ? { cls:'bg-blue-50 text-blue-700',       bar:'bg-blue-500',    label:'Tốt'       }
+                 : score >= 40 ? { cls:'bg-amber-50 text-amber-700',     bar:'bg-amber-500',   label:'Trung bình'}
+                 :               { cls:'bg-red-50 text-red-600',          bar:'bg-red-400',     label:'Thấp'      }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
               call.appointment_booked ? 'bg-violet-50' : isIn ? 'bg-emerald-50' : noAns ? 'bg-orange-50' : 'bg-blue-50'
             }`}>
               {call.appointment_booked ? <CalendarCheck className="w-4 h-4 text-violet-600" />
-                : isIn                 ? <PhoneIncoming className="w-4 h-4 text-emerald-600" />
-                : noAns                ? <PhoneMissed className="w-4 h-4 text-orange-500" />
-                :                        <PhoneOutgoing className="w-4 h-4 text-blue-600" />}
+                : isIn  ? <PhoneIncoming className="w-4 h-4 text-emerald-600" />
+                : noAns ? <PhoneMissed   className="w-4 h-4 text-orange-500"  />
+                :          <PhoneOutgoing className="w-4 h-4 text-blue-600"   />}
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-800">{call.contact_name || 'Không rõ tên'}</p>
@@ -100,8 +106,6 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
         </div>
 
         <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-
-          {/* Score */}
           {!noAns && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
@@ -113,8 +117,6 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
               </div>
             </div>
           )}
-
-          {/* Info chips */}
           <div className="grid grid-cols-2 gap-2">
             {[
               ['Loại', isIn ? 'Gọi đến' : 'Gọi đi'],
@@ -131,8 +133,6 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
               </div>
             ))}
           </div>
-
-          {/* Appointment */}
           {call.appointment_booked && call.appointment_datetime && (
             <div className="bg-violet-50 border border-violet-100 rounded-xl p-3.5">
               <p className="text-xs font-semibold text-violet-600 mb-1 flex items-center gap-1.5">
@@ -142,16 +142,12 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
               {call.appointment_notes && <p className="text-xs text-violet-600 mt-1">{call.appointment_notes}</p>}
             </div>
           )}
-
-          {/* Summary */}
           {call.summary && (
             <div className="bg-gray-50 rounded-xl p-4">
               <p className="text-[11px] font-semibold text-gray-400 mb-1.5">Tóm tắt AI</p>
               <p className="text-sm text-gray-700 leading-relaxed">{call.summary}</p>
             </div>
           )}
-
-          {/* Recording */}
           {call.recording_url && (
             <div>
               <p className="text-[11px] font-semibold text-gray-400 mb-1.5 flex items-center gap-1.5">
@@ -160,8 +156,6 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
               <audio controls src={call.recording_url} className="w-full rounded-xl" />
             </div>
           )}
-
-          {/* Transcript */}
           {call.transcript && (
             <div>
               <p className="text-[11px] font-semibold text-gray-400 mb-1.5">Nội dung cuộc gọi</p>
@@ -181,10 +175,188 @@ function CallDetailModal({ call, onClose }: { call: Call; onClose: () => void })
   )
 }
 
+// ── Contact group (grouped view) ──────────────────────────────────────────────
+
+type ContactGroup = {
+  phone: string
+  name: string
+  calls: Call[]
+  booked: boolean
+  lastCall: string
+  totalConnected: number
+  bestSummary: string | null
+}
+
+function buildContactGroups(calls: Call[]): ContactGroup[] {
+  const map = new Map<string, Call[]>()
+  for (const c of calls) {
+    const key = c.contact_phone ?? 'unknown'
+    const arr = map.get(key) ?? []; arr.push(c); map.set(key, arr)
+  }
+  const groups: ContactGroup[] = []
+  map.forEach((cList, phone) => {
+    const sorted  = [...cList].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const booked  = sorted.some(c => c.appointment_booked)
+    const name    = sorted.find(c => c.contact_name)?.contact_name ?? phone
+    const connected = sorted.filter(c => c.status === 'completed')
+    const bestSummary = sorted.find(c => c.summary)?.summary ?? null
+    groups.push({
+      phone, name, calls: sorted, booked,
+      lastCall: sorted[0].created_at,
+      totalConnected: connected.length,
+      bestSummary,
+    })
+  })
+  return groups.sort((a, b) => new Date(b.lastCall).getTime() - new Date(a.lastCall).getTime())
+}
+
+function ContactCard({ group, onCallClick }: { group: ContactGroup; onCallClick: (c: Call) => void }) {
+  const [expanded, setExpanded] = useState(false)
+  const allNoAnswer = group.calls.every(c => c.status === 'no_answer')
+  const attempts    = group.calls.length
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+      {/* Summary row */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors text-left"
+      >
+        {/* Avatar */}
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-sm font-bold ${
+          group.booked       ? 'bg-violet-100 text-violet-600'
+          : allNoAnswer      ? 'bg-orange-50 text-orange-400'
+          : group.totalConnected > 0 ? 'bg-blue-50 text-blue-600'
+          : 'bg-gray-100 text-gray-400'
+        }`}>
+          {group.name.slice(-1).toUpperCase()}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-sm font-semibold text-gray-800 truncate">{group.name}</span>
+            <span className="text-xs text-gray-400 shrink-0">{group.phone !== group.name ? group.phone : ''}</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <span className={`font-medium ${allNoAnswer ? 'text-orange-500' : group.booked ? 'text-violet-600' : 'text-blue-600'}`}>
+              {group.booked ? '✓ Đặt lịch'
+                : allNoAnswer ? `${attempts} lần không nghe`
+                : `${group.totalConnected}/${attempts} kết nối`}
+            </span>
+            {group.bestSummary && (
+              <span className="truncate text-gray-400">· {group.bestSummary}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Right */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <span className="text-xs text-gray-400">{timeAgo(group.lastCall)}</span>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              group.booked ? 'bg-violet-50 text-violet-600'
+              : allNoAnswer ? 'bg-orange-50 text-orange-500'
+              : 'bg-blue-50 text-blue-600'
+            }`}>
+              {attempts} cuộc
+            </span>
+            {expanded
+              ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+              : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
+          </div>
+        </div>
+      </button>
+
+      {/* Expanded individual calls */}
+      {expanded && (
+        <div className="border-t border-gray-50 divide-y divide-gray-50 bg-gray-50/50">
+          {group.calls.map(call => {
+            const noAns = call.status === 'no_answer'
+            const dur   = fmtDuration(call.duration_seconds)
+            return (
+              <button key={call.id} onClick={() => onCallClick(call)}
+                className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-white transition-colors text-left">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                  call.appointment_booked ? 'bg-violet-100' : noAns ? 'bg-orange-50' : 'bg-blue-50'
+                }`}>
+                  {call.appointment_booked ? <CalendarCheck className="w-3 h-3 text-violet-600" />
+                    : noAns ? <PhoneMissed className="w-3 h-3 text-orange-400" />
+                    : call.direction === 'inbound' ? <PhoneIncoming className="w-3 h-3 text-blue-500" />
+                    : <PhoneOutgoing className="w-3 h-3 text-blue-500" />}
+                </div>
+                <span className="text-xs text-gray-500 w-12 shrink-0">{fmtTime(call.created_at)}</span>
+                <span className="text-xs text-gray-400 shrink-0">{dayLabel(call.created_at)}</span>
+                <span className="flex-1 text-xs text-gray-400 truncate ml-2">
+                  {call.summary || (noAns ? 'Không nghe máy' : call.appointment_booked ? 'Đã đặt lịch' : 'Đã kết nối')}
+                </span>
+                {dur && (
+                  <span className="text-xs text-gray-400 flex items-center gap-0.5 shrink-0">
+                    <Clock className="w-2.5 h-2.5" />{dur}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Call row (timeline view) ──────────────────────────────────────────────────
+
+function CallCard({ call, onClick }: { call: Call; onClick: () => void }) {
+  const noAns  = call.status === 'no_answer'
+  const booked = call.appointment_booked
+  const dur    = fmtDuration(call.duration_seconds)
+
+  return (
+    <button onClick={onClick}
+      className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+        booked ? 'bg-violet-100' : noAns ? 'bg-orange-50' : 'bg-blue-50'
+      }`}>
+        {booked ? <CalendarCheck className="w-3.5 h-3.5 text-violet-600" />
+          : noAns ? <PhoneMissed className="w-3.5 h-3.5 text-orange-400" />
+          : call.direction === 'inbound' ? <PhoneIncoming className="w-3.5 h-3.5 text-blue-500" />
+          : <PhoneOutgoing className="w-3.5 h-3.5 text-blue-500" />}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm font-medium text-gray-800 truncate">
+            {call.contact_name || call.contact_phone || '—'}
+          </span>
+          {call.contact_name && <span className="text-xs text-gray-400 shrink-0">{call.contact_phone}</span>}
+        </div>
+        <p className="text-xs text-gray-400 truncate mt-0.5">
+          {call.summary || (noAns ? 'Không nghe máy' : booked ? 'Đã đặt lịch hẹn' : 'Đã kết nối')}
+        </p>
+      </div>
+
+      <div className="flex flex-col items-end gap-0.5 shrink-0 text-right">
+        <span className="text-xs text-gray-400">{fmtTime(call.created_at)}</span>
+        <div className="flex items-center gap-1.5">
+          {dur && <span className="text-[10px] text-gray-400 flex items-center gap-0.5"><Clock className="w-2.5 h-2.5" />{dur}</span>}
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+            booked ? 'bg-violet-50 text-violet-600'
+            : noAns ? 'bg-orange-50 text-orange-500'
+            : 'bg-blue-50 text-blue-600'
+          }`}>
+            {booked ? 'Đặt lịch' : noAns ? 'Không nghe' : 'Kết nối'}
+          </span>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type StatusFilter = 'all' | 'booked' | 'completed' | 'no_answer'
 type PeriodFilter = 'today' | '7d' | '30d' | 'all'
+type ViewMode    = 'timeline' | 'contacts'
 
 const PERIODS: { key: PeriodFilter; label: string }[] = [
   { key: 'today', label: 'Hôm nay' },
@@ -192,72 +364,6 @@ const PERIODS: { key: PeriodFilter; label: string }[] = [
   { key: '30d',   label: '30 ngày' },
   { key: 'all',   label: 'Tất cả'  },
 ]
-
-// ── Call row card ─────────────────────────────────────────────────────────────
-
-function CallCard({ call, onClick }: { call: Call; onClick: () => void }) {
-  const noAns  = call.status === 'no_answer'
-  const booked = call.appointment_booked
-  const score  = calcScore(call)
-  const dur    = fmtDuration(call.duration_seconds)
-
-  const iconBg  = booked ? 'bg-violet-100' : noAns ? 'bg-orange-50' : 'bg-blue-50'
-  const iconClr = booked ? 'text-violet-600' : noAns ? 'text-orange-400' : 'text-blue-500'
-
-  return (
-    <button
-      onClick={onClick}
-      className="w-full text-left flex items-start gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors group"
-    >
-      {/* Icon */}
-      <div className={`w-9 h-9 rounded-full ${iconBg} flex items-center justify-center shrink-0 mt-0.5`}>
-        {booked        ? <CalendarCheck className={`w-4 h-4 ${iconClr}`} />
-          : noAns      ? <PhoneMissed   className={`w-4 h-4 ${iconClr}`} />
-          : call.direction === 'inbound'
-                       ? <PhoneIncoming className={`w-4 h-4 ${iconClr}`} />
-                       : <PhoneOutgoing className={`w-4 h-4 ${iconClr}`} />}
-      </div>
-
-      {/* Main info */}
-      <div className="flex-1 min-w-0">
-        {/* Row 1: name + time + status */}
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-sm font-semibold text-gray-800 truncate">
-            {call.contact_name || call.contact_phone || '—'}
-          </span>
-          {call.contact_name && (
-            <span className="text-xs text-gray-400 shrink-0">{call.contact_phone}</span>
-          )}
-          <span className="ml-auto text-xs text-gray-400 shrink-0 pl-2">{fmtTime(call.created_at)}</span>
-        </div>
-
-        {/* Row 2: summary or status */}
-        <p className="text-xs text-gray-400 truncate leading-relaxed">
-          {call.summary
-            ? call.summary
-            : noAns ? 'Không nghe máy'
-            : booked ? `Đặt lịch hẹn${call.appointment_datetime ? ' · ' + call.appointment_datetime : ''}`
-            : 'Đã kết nối'}
-        </p>
-      </div>
-
-      {/* Right meta */}
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        {booked ? (
-          <span className="text-[10px] font-bold bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full">Đặt lịch</span>
-        ) : noAns ? (
-          <span className="text-[10px] font-bold bg-orange-50 text-orange-500 px-2 py-0.5 rounded-full">Không nghe</span>
-        ) : (
-          <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">Kết nối</span>
-        )}
-        <div className="flex items-center gap-1 text-[10px] text-gray-400">
-          {dur && <><Clock className="w-2.5 h-2.5" />{dur}</>}
-          {!noAns && <span className="text-gray-300 ml-1">{score}đ</span>}
-        </div>
-      </div>
-    </button>
-  )
-}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -272,6 +378,7 @@ export default function CallHistoryPage() {
   const [period, setPeriod]   = useState<PeriodFilter>('30d')
   const [status, setStatus]   = useState<StatusFilter>('all')
   const [search, setSearch]   = useState('')
+  const [viewMode, setViewMode] = useState<ViewMode>('contacts')
 
   const clientIdRef = useRef<string | null>(null)
 
@@ -319,9 +426,9 @@ export default function CallHistoryPage() {
   })
 
   const filtered = periodFiltered.filter(c => {
-    if (status === 'booked'    && !c.appointment_booked)     return false
-    if (status === 'completed' && c.status !== 'completed')  return false
-    if (status === 'no_answer' && c.status !== 'no_answer')  return false
+    if (status === 'booked'    && !c.appointment_booked)    return false
+    if (status === 'completed' && c.status !== 'completed') return false
+    if (status === 'no_answer' && c.status !== 'no_answer') return false
     if (search) {
       const q = search.toLowerCase()
       return (c.contact_name ?? '').toLowerCase().includes(q) || (c.contact_phone ?? '').includes(q)
@@ -331,20 +438,25 @@ export default function CallHistoryPage() {
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
 
-  const base    = periodFiltered
-  const booked  = base.filter(c => c.appointment_booked).length
-  const noAns   = base.filter(c => c.status === 'no_answer').length
-  const connect = base.filter(c => c.status === 'completed').length
-  const bookRate = base.length > 0 ? Math.round((booked / base.length) * 100) : 0
+  const base      = periodFiltered
+  const booked    = base.filter(c => c.appointment_booked).length
+  const noAns     = base.filter(c => c.status === 'no_answer').length
+  const connect   = base.filter(c => c.status === 'completed').length
+  const bookRate  = base.length > 0 ? Math.round((booked / base.length) * 100) : 0
+  const uniqueContacts = new Set(base.map(c => c.contact_phone).filter(Boolean)).size
 
-  // ── Group by day ─────────────────────────────────────────────────────────────
+  // ── Contact groups ────────────────────────────────────────────────────────────
 
-  const grouped: { label: string; calls: Call[] }[] = []
+  const contactGroups = buildContactGroups(filtered)
+
+  // ── Timeline groups (by day) ──────────────────────────────────────────────────
+
+  const dayGroups: { label: string; calls: Call[] }[] = []
   for (const call of filtered) {
     const label = dayLabel(call.created_at)
-    const last  = grouped[grouped.length - 1]
+    const last  = dayGroups[dayGroups.length - 1]
     if (last && last.label === label) last.calls.push(call)
-    else grouped.push({ label, calls: [call] })
+    else dayGroups.push({ label, calls: [call] })
   }
 
   if (loading) return <PageSkeleton />
@@ -357,7 +469,7 @@ export default function CallHistoryPage() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-bold text-gray-800">Lịch sử cuộc gọi</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Tự động cập nhật · {allCalls.length} cuộc đã ghi</p>
+          <p className="text-xs text-gray-400 mt-0.5">Tự động cập nhật mỗi 30s · {allCalls.length} cuộc đã ghi</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => exportCSV(filtered)}
@@ -374,11 +486,13 @@ export default function CallHistoryPage() {
       {/* ── KPI strip ── */}
       <div className="grid grid-cols-5 gap-3 mb-5">
         {[
-          { label: 'Tổng cuộc gọi', value: base.length,  sub: period === 'today' ? 'hôm nay' : period, color: 'text-gray-800',    bg: 'bg-gray-50'    },
-          { label: 'Kết nối',       value: connect,       sub: `${base.length > 0 ? Math.round(connect/base.length*100) : 0}% nghe`, color: 'text-blue-700',   bg: 'bg-blue-50'    },
-          { label: 'Đặt lịch',      value: booked,        sub: `${bookRate}% CR`,  color: 'text-violet-700', bg: 'bg-violet-50'  },
-          { label: 'Không nghe',    value: noAns,         sub: `${base.length > 0 ? Math.round(noAns/base.length*100) : 0}% tổng`, color: 'text-orange-600', bg: 'bg-orange-50'  },
-          { label: 'Chất lượng',    value: `${bookRate}%`, sub: 'tỷ lệ chốt lịch', color: bookRate >= 15 ? 'text-emerald-700' : bookRate >= 8 ? 'text-amber-600' : 'text-red-500', bg: bookRate >= 15 ? 'bg-emerald-50' : bookRate >= 8 ? 'bg-amber-50' : 'bg-red-50' },
+          { label: 'Khách duy nhất', value: uniqueContacts,   sub: `trong ${base.length} cuộc`,         color: 'text-gray-800',    bg: 'bg-gray-50'    },
+          { label: 'Kết nối',        value: connect,           sub: `${base.length > 0 ? Math.round(connect/base.length*100) : 0}% nghe máy`, color: 'text-blue-700',   bg: 'bg-blue-50'    },
+          { label: 'Đặt lịch',       value: booked,            sub: `${bookRate}% tỷ lệ chốt`,           color: 'text-violet-700',  bg: 'bg-violet-50'  },
+          { label: 'Không nghe',     value: noAns,             sub: `${base.length > 0 ? Math.round(noAns/base.length*100) : 0}% tổng cuộc`,  color: 'text-orange-600', bg: 'bg-orange-50'  },
+          { label: 'Chất lượng',     value: `${bookRate}%`,    sub: 'tỷ lệ chốt lịch',
+            color: bookRate >= 15 ? 'text-emerald-700' : bookRate >= 8 ? 'text-amber-600' : 'text-red-500',
+            bg:    bookRate >= 15 ? 'bg-emerald-50'    : bookRate >= 8 ? 'bg-amber-50'    : 'bg-red-50'    },
         ].map(k => (
           <div key={k.label} className={`${k.bg} rounded-2xl p-4`}>
             <p className={`text-2xl font-bold ${k.color}`}>{k.value}</p>
@@ -388,8 +502,24 @@ export default function CallHistoryPage() {
         ))}
       </div>
 
-      {/* ── Filter bar (1 row) ── */}
-      <div className="flex items-center gap-2 mb-4">
+      {/* ── Toolbar ── */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+
+        {/* View mode toggle */}
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-0.5">
+          <button onClick={() => setViewMode('contacts')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              viewMode === 'contacts' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            <Users className="w-3 h-3" /> Theo khách
+          </button>
+          <button onClick={() => setViewMode('timeline')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              viewMode === 'timeline' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            <List className="w-3 h-3" /> Timeline
+          </button>
+        </div>
 
         {/* Period */}
         <div className="flex bg-gray-100 rounded-xl p-1 gap-0.5">
@@ -418,7 +548,7 @@ export default function CallHistoryPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Tên, SĐT..."
-            className="pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 w-44" />
+            className="pl-9 pr-8 py-2 border border-gray-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 w-40" />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
               <X className="w-3 h-3 text-gray-400 hover:text-gray-600" />
@@ -426,10 +556,12 @@ export default function CallHistoryPage() {
           )}
         </div>
 
-        <span className="text-xs text-gray-400 font-medium whitespace-nowrap">{filtered.length} cuộc</span>
+        <span className="text-xs text-gray-400 font-medium whitespace-nowrap">
+          {viewMode === 'contacts' ? `${contactGroups.length} khách` : `${filtered.length} cuộc`}
+        </span>
       </div>
 
-      {/* ── Grouped card list ── */}
+      {/* ── Content ── */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 py-16 text-center shadow-sm">
           <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
@@ -438,23 +570,30 @@ export default function CallHistoryPage() {
           <p className="text-sm text-gray-400 font-medium">Không có cuộc gọi nào</p>
           <p className="text-xs text-gray-300 mt-1">Thử đổi bộ lọc hoặc khoảng thời gian</p>
         </div>
+
+      ) : viewMode === 'contacts' ? (
+        /* ── Contacts view ── */
+        <div className="space-y-2">
+          {contactGroups.map(group => (
+            <ContactCard key={group.phone} group={group} onCallClick={setSelectedCall} />
+          ))}
+        </div>
+
       ) : (
+        /* ── Timeline view ── */
         <div className="space-y-4">
-          {grouped.map(group => (
+          {dayGroups.map(group => (
             <div key={group.label}>
-              {/* Date header */}
               <div className="flex items-center gap-3 mb-2 px-1">
                 <span className="text-xs font-bold text-gray-500">{group.label}</span>
                 <span className="text-xs text-gray-300">{group.calls.length} cuộc</span>
                 <div className="flex-1 h-px bg-gray-100" />
-                <span className="text-xs text-gray-300">
-                  {group.calls.filter(c => c.appointment_booked).length > 0
-                    ? `${group.calls.filter(c => c.appointment_booked).length} đặt lịch`
-                    : ''}
-                </span>
+                {group.calls.filter(c => c.appointment_booked).length > 0 && (
+                  <span className="text-xs text-violet-500 font-medium">
+                    {group.calls.filter(c => c.appointment_booked).length} đặt lịch
+                  </span>
+                )}
               </div>
-
-              {/* Cards */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
                 {group.calls.map(call => (
                   <CallCard key={call.id} call={call} onClick={() => setSelectedCall(call)} />
